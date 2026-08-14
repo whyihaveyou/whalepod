@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tileDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B2140"/>
+      <stop offset="1" stop-color="#12152B"/>
+    </linearGradient>
+    <linearGradient id="glyphGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8FA4FF"/>
+      <stop offset="1" stop-color="#A98BFF"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark-dock variant: deep navy tile, gradient glyph -->
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#tileDark)"/>
+  <rect x="103" y="103" width="818" height="818" rx="185" fill="none" stroke="url(#rim)" stroke-width="2"/>
+
+  <g stroke="url(#glyphGrad)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 272 390 L 402 630 L 512 455 L 622 630 L 752 390"/>
+  </g>
+  <g fill="url(#glyphGrad)">
+    <circle cx="272" cy="390" r="46"/>
+    <circle cx="402" cy="630" r="46"/>
+    <circle cx="622" cy="630" r="46"/>
+    <circle cx="752" cy="390" r="46"/>
+    <path d="M 512 397 L 570 455 L 512 513 L 454 455 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+# honeycomb 最小可加载 patch —— attrs 给 harness 项目根做挂载验证
+# 语义：不侵入主配置，向 cordis.yml 追加（insert）一个 honeycomb entry。
+
+- insert:
+    - id: honeycomb
+      name: '@dfh/honeycomb'     # 插件包引用（或相对 ./honeycomb-adaptor/adaptor.mjs）
+      config:
+        interval: 1000

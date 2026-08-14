@@ -1,0 +1,160 @@
+# 外部 CLI Agent 接口实测清单（连接器适配）
+
+> 实测人：连接器-Pro
+> 实测日期：2026-08-14
+> 用途：供 `adapters/*` 连接器实现使用。每个 agent 一条目，含 CLI 入口、检测方式、版本、配置目录、常用 flags、输出/流式格式、后端、实测结论。
+
+---
+
+## 总览
+
+| Agent | 状态 | CLI 入口 | 版本 | 后端 | 非交互模式 | 流式格式 | 实测可用 |
+|---|---|---|---|---|---|---|---|
+| codex | 已装 | `codex` | codex-cli 0.146.0 | ChatGPT (`chatgpt.com/backend-api`) | `codex exec` | JSONL (NDJSON) | ❌ 403 区域封锁 |
+| kimi | 已装 | `kimi` | 0.34.0 | Moonshot (ark + managed) | `kimi -p` | stream-json (JSONL) / text | ⚠️ 超时 |
+| opencode | 已装 | `opencode` | 1.18.16 | DeepSeek | `opencode run` | `--format json` (NDJSON) | ✅ 成功 |
+| hermes | 已装 | `hermes` | v0.20.0 | opencode.ai/zen/go | `hermes -z` (oneshot) | 纯文本（非流式） | ✅ 成功 |
+| claude | 未装 | `claude` | — | Anthropic | `claude -p` | stream-json (JSONL) | 未安装 |
+| gemini | 未装 | `gemini` | — | Google | `gemini -p` | stream-json | 未安装 |
+| aider | 未装 | `aider` | — | 多后端 | `aider --message` | 纯文本 | 未安装 |
+| goose | 未装 | `goose` | — | 多后端 | `goose run` | 纯文本/JSON | 未安装 |
+| qwen-code | 未装 | `qwen` / `qwen-code` | — | 通义 | `qwen -p` | stream-json | 未安装 |
+
+---
+
+## 1. codex（OpenAI Codex CLI）
+
+- **CLI 入口**：`codex` → `/Users/qzp/.local/opt/node/bin/codex`（npm 全局安装，Rust 二进制经 npm 分发）
+- **检测安装**：`command -v codex`
+- **检测版本**：`codex --version` → `codex-cli 0.146.0`
+- **配置目录**：`~/.codex/`
+  - `config.toml`：`[tui] model_availability_nux`、`[projects] trust_level`、`[approvals] reviewer`
+  - `auth.json`：`{ auth_mode, OPENAI_API_KEY, tokens:{ id_token, access_token, refresh_token, account_id }, last_refresh }`
+  - `history.jsonl`、`sessions/`
+- **常用 flags**（`codex exec --help`）：
+  - `-m/--model <model>` 指定模型
+  - `--json` 以 JSON 事件流输出（默认文本渲染）
+  - `-o/--output-last-message <file>` 仅输出最后一条消息
+  - `-s/--sandbox <mode>`：read-only / workspace-write / danger-full-access
+  - `--dangerously-bypass-approvals-and-sandbox`、`--dangerously-bypass-hook-trust`
+  - `-C/--cd <dir>`、`--add-dir <dir>` 添加上下文目录
+  - `--skip-git-repo-check`（非 git 目录直接跑）
+  - `--ephemeral`、`--ignore-user-config`、`--ignore-rules`
+  - `--output-schema <json-schema>` 结构化输出约束
+  - `-p/--profile`、`-c/--config`、`-i/--image`
+- **输出/流式格式**：`--json` 输出 NDJSON 事件流，事件类型包括 `thread.started` / `turn.started` / `item.completed` / `error`。`item.completed` 的 `item.type` 可为 `reasoning` / `tool_use` / `text`。`-o/--output-last-message` 仅取最终助手文本。
+- **后端**：默认走 ChatGPT 后端 `wss://chatgpt.com/backend-api/codex/responses`（OAuth token 认证，模型 `gpt-5.6-sol`）。
+- **实测结论**：CLI 可运行、JSONL 格式正确，但后端请求被 **403 Cloudflare 区域封锁**（当前网络未开代理/VPN），`exec` 挂起直至超时。**adapter 需内置代理支持，或本机配 VPN 后可用。**
+
+---
+
+## 2. kimi（Moonshot Kimi Code CLI）
+
+- **CLI 入口**：`kimi` → `/Users/qzp/.kimi-code/bin/kimi`
+- **检测安装**：`command -v kimi`
+- **检测版本**：`kimi --version` → `0.34.0`
+- **配置目录**：`~/.kimi-code/config.toml`
+  - 含两个 provider：`managed:kimi-code`（OAuth token，`api.kimi.com`）+ `ark`（API key，`ark.cn-beijing.volces.com`）
+  - 默认模型 `ark/ark-code-latest`，另有 `managed:kimi-code/...`
+- **常用 flags / 命令**：
+  - 非交互：`kimi -p "prompt"`（`--prompt`）
+  - `--output-format text|stream-json` 选择输出格式
+  - `-m/--model <model>`、`-S/--session <id>`、`-c/--continue`（继续最近会话）
+  - `-y/--yolo`（跳过权限确认）、`--auto`、`--plan`
+  - `--skills-dir`、`--agent`、`--agent-file`、`--add-dir`
+  - 子命令：`export`、`provider`、`acp`（ACP over stdio）、`web`、`login`、`doctor`、`vis`、`migrate`、`upgrade`
+- **输出/流式格式**：`--output-format stream-json` 输出 JSONL 事件流（NDJSON）；默认 `text` 为纯文本。流式事件含会话 id、消息增量、usage 等（未完整抓到，见实测）。
+- **后端**：Moonshot ark / managed（api.kimi.com）。
+- **实测结论**：`--version` 正常；`kimi -p --output-format stream-json` 与 text 模式（ark 模型）均 **超时**，疑网络访问 ark 端点慢或被限。**adapter 需支持 stream-json 解析，且当前网络下 ark 模型不稳。**
+
+---
+
+## 3. opencode（opencode-ai）
+
+- **CLI 入口**：`opencode` → `/Users/qzp/.local/opt/node/bin/opencode`
+- **检测安装**：`command -v opencode`
+- **检测版本**：`opencode --version` → `1.18.16`
+- **配置目录**：`~/.config/opencode/opencode.json`
+  - 已配 `model: deepseek/deepseek-chat`、`provider: deepseek`（`apiKey` + `baseURL: api.deepseek.com/v1`）
+  - `mcp: { sciverse: {...} }` 已启用
+- **常用 flags / 命令**：
+  - 非交互：`opencode run "message"`
+  - `--format json|default`（json = 原始 JSON 事件流；default = 格式化文本）
+  - `-m/--model <provider/model>`、`--agent <agent>`、`--variant <id>`
+  - `-c/--continue`、`-s/--session <id>`、`--fork`
+  - `-f/--file <file>` 文件输入、`--attach <id>`、`--title`
+  - `--print-logs`、`--log-level <lvl>`、`--pure`、`--command`
+  - `-i/--interactive`、`--auto`（全自动无提示）、`--thinking`
+- **输出/流式格式**：`--format json` 输出 NDJSON 事件流，事件 `type` 为 `step_start`（part=`step-start`）、`text`（part=`text`，`text` 字段携带增量）、`step_finish`（part=`step-finish`，含 `tokens`/`finishReason`）。`--format default` 输出人类可读文本。
+- **后端**：DeepSeek（OpenAI 兼容 `api.deepseek.com/v1`）。
+- **实测结论**：✅ `opencode run --format json "reply with exactly OK"` 成功返回，事件序列 `step_start → text → step_finish` 抓取无误。**本机唯一端到端可用 agent，adapter 首选参考实现。** token 统计在 `step_finish.step.tokens` 中（本次为空，长回复时会填充）。
+
+---
+
+## 4. hermes（Hermes Agent）
+
+- **CLI 入口**：`hermes` → `/Users/qzp/.local/bin/hermes`
+- **检测安装**：`command -v hermes`
+- **检测版本**：`hermes --version` → `Hermes Agent v0.20.0`
+- **配置目录**：`~/.hermes/config.yaml`（另有 `~/.hermes/.env`、`checkpoints/` 等）
+  - 默认模型 `deepseek-v4-flash`，provider `opencode-go`，`base_url: opencode.ai/zen/go/v1`
+  - 另有 `pujiang-deepseek`、`aliyun-token-plan` 等 provider
+- **常用 flags**（`hermes --help`）：
+  - 非交互：`hermes -z "PROMPT"`（`--oneshot`，单次提问，只打印最终答复）
+  - `-m/--model`、`--provider`、`--reasoning <level>`、`-t/--toolsets`
+  - `--usage-file <path>` 输出 token 用量到文件
+  - `--resume <session>`、`--continue [name]`、`--no-restore-cwd`、`--worktree`
+  - `--accept-hooks`、`--skills`、`--yolo`、`--pass-session-id`
+  - `--ignore-user-config`、`--ignore-rules`、`--safe-mode`、`--tui`、`--cli`、`--dev`
+- **子命令**（大量）：`chat`、`model`、`config`、`memory`、`mcp`、`cron`、`sessions`、`acp`、`version`、`doctor`、`backup`、`import-agent`（可导入 Claude Code / Codex CLI 配置）等。
+- **输出/流式格式**：`-z/--oneshot` 为**一次性纯文本**（stdout 直接打印最终回复，非流式），可配 `--usage-file` 记录用量。交互式 `chat` 有 TUI。
+- **后端**：opencode.ai/zen/go/v1（OpenAI 兼容）。
+- **实测结论**：✅ `hermes -z "reply with exactly: OK"` 成功返回 `OK`。适合无流式需求的一问一答适配。
+
+---
+
+## 5. 未安装的 agent（检测命令 + 安装方式）
+
+### claude（Anthropic Claude Code）
+- 检测：`command -v claude` → 当前未命中
+- 安装：
+  - `npm install -g @anthropic-ai/claude-code`（npm 最新版）
+  - 或 `brew install --cask claude-code`（原生二进制）
+- 非交互：`claude -p "prompt" --output-format stream-json`；配置目录 `~/.claude/`（含 `settings.json`、认证）。流式 JSONL 事件（`system`/`assistant`/`user`/`result` 类型）。
+
+### gemini（Google Gemini CLI）
+- 检测：`command -v gemini` → 未命中
+- 安装：`npm install -g @google/gemini-cli`
+- 非交互：`gemini -p "prompt"`；支持 `--output-format stream-json|json|text`。配置 `~/.gemini/`。
+
+### aider
+- 检测：`command -v aider` → 未命中
+- 安装：`pipx install aider-chat` 或 `pip install aider-chat`
+- 非交互：`aider --message "..." --yes`（`--message`/`-m`，`--yes` 免确认）。输出为纯文本，`--dark-mode` 等。配置 `~/.aider.conf.yml`。
+
+### goose
+- 检测：`command -v goose` → 未命中
+- 安装：`curl -fsSL https://github.com/block/goose/releases/latest/download/download_cli.sh | sh` 或 `brew install goose`
+- 非交互：`goose run -t "..."`（text 模式）/ `--text`。配置 `~/.config/goose/`。
+
+### qwen-code（通义灵码 CLI）
+- 检测：`command -v qwen` / `command -v qwen-code` → 未命中
+- 安装：`npm install -g @qwen-code/qwen-code`（二进制名 `qwen` 或 `qwen-code`）
+- 非交互：`qwen -p "prompt"`；支持 `--output-format stream-json`。配置 `~/.qwen/`。
+
+---
+
+## 6. adapter 实现要点
+
+1. **统一检测入口**：`command -v <bin>` 判存在，`<bin> --version` 判版本（version 输出各 agent 格式不一，需归一化）。
+2. **非交互调用约定**：
+   - codex → `codex exec --json <prompt>`
+   - kimi → `kimi -p <prompt> --output-format stream-json`
+   - opencode → `opencode run --format json <prompt>`
+   - hermes → `hermes -z <prompt>`
+   - claude → `claude -p <prompt> --output-format stream-json`
+   - gemini → `gemini -p <prompt>`
+   - aider → `aider --message <prompt> --yes`
+3. **流式解析**：codex / kimi / opencode / claude / gemini 均输出 **NDJSON（JSONL）事件流**，但事件 schema 各不相同，需各写一个 parser。hermes/aider/goose 为纯文本。
+4. **本机网络现状**：codex（ChatGPT 后端）被 403 封锁需代理；kimi ark 端点超时；opencode（DeepSeek）与 hermes（opencode.ai）可用。**adapter 应支持 per-agent 的 HTTP(S) 代理注入，并对超时/封锁做明确错误上报。**
+5. **配置目录**：`~/.codex`、`~/.kimi-code`、`~/.config/opencode`、`~/.hermes`、`~/.claude`、`~/.gemini`、`~/.aider.conf.yml`、`~/.config/goose`、`~/.qwen`。

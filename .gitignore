@@ -1,0 +1,17 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.build/
+lib/
+*.tsbuildinfo
+
+# 上游克隆与参考仓库（非本项目代码）
+deepseek-harness/
+refs/
+
+# 运行时/测试产物
+*.log
+coverage/
+
+# 系统/编辑器
+.DS_Store

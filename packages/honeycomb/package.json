@@ -1,0 +1,46 @@
+{
+  "name": "@dfh/honeycomb",
+  "version": "0.1.0",
+  "description": "DFH Workstation multi-agent orchestration core — concept-level reimplementation on Cordis primitives (Hive / Queen / Worker / Roster / Ledger / Courier / Mandate).",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx test/smoke.ts",
+    "test:persistence": "tsx --test test/persistence.test.ts",
+    "test:e2e": "tsx --test test/e2e-core.test.ts",
+    "example": "tsx examples/hive-quickstart/index.ts"
+  },
+  "keywords": [
+    "honeycomb",
+    "orchestration",
+    "multi-agent",
+    "cordis"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.21.3"
+  }
+}

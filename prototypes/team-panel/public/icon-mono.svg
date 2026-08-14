@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Template / monochrome variant (menu bar, favicon, print).
+       Use currentColor in UI contexts; shown here in solid black. -->
+  <g stroke="#000000" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 242 350 L 402 660 L 512 450 L 622 660 L 782 350"/>
+  </g>
+  <g fill="#000000">
+    <circle cx="242" cy="350" r="54"/>
+    <circle cx="402" cy="660" r="54"/>
+    <circle cx="622" cy="660" r="54"/>
+    <circle cx="782" cy="350" r="54"/>
+    <path d="M 512 384 L 578 450 L 512 516 L 446 450 Z"/>
+  </g>
+</svg>

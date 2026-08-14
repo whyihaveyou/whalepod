@@ -1,0 +1,14 @@
+# 真实 dsh 环境下的插件配置示例（loader 会读这个文件挂载插件）
+# 顶层必须是 entry 数组
+
+- id: minimal-counter       # 全局唯一 id，供 patch 定位
+  name: minimal-counter     # 对应插件导出的 name（npm 包名或本地模块）
+  config:                   # 传给 apply(ctx, config) 的第二参数
+    name: Cordis
+    interval: 500
+
+# patch 层示例（单独放 cordis.patch.yml）：
+# - id: minimal-counter
+#   name: minimal-counter
+#   config:
+#     interval: 250         # 覆盖 interval
