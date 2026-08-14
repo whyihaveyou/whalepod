@@ -13,7 +13,7 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Events } from '../framework'
+import type { HiveEventMap } from '../events'
 import type { HiveId, MemberId, TaskId, MessageId } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -72,11 +72,11 @@ export function matchPath(
 // ---------------------------------------------------------------------------
 
 /** WS 服务端 → 客户端事件帧（§4.2）。 */
-export interface WsEventFrame<K extends keyof Events = keyof Events> {
+export interface WsEventFrame<K extends keyof HiveEventMap = keyof HiveEventMap> {
   type: 'event'
   topic: K
   hiveId: HiveId | null
-  payload: Events[K]
+  payload: HiveEventMap[K]
 }
 
 /** WS 客户端 → 服务端指令（§4.1）。 */

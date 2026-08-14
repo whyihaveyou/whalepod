@@ -10,7 +10,8 @@
 
 import './context'
 
-export * from './framework'
+// 真实 cordis Context（构造即可得独立根上下文）。framework.ts shim 已迁移删除。
+export { Context, Service } from '@deepseek-ai/cordis'
 export * from './types'
 export * from './config'
 export * from './events'

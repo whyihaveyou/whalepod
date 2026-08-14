@@ -1,8 +1,10 @@
 /**
  * Context augmentation — merges the five honeycomb services (plus `agents`)
- * into the framework's `Context` interface, giving `ctx.hive` / `ctx.ledger` /
- * `ctx.courier` / `ctx.mandate` / `ctx.roster` / `ctx.agents` typed access
- * (same idiom as Cordis).
+ * into cordis's `Context` interface, giving `ctx.hive` / `ctx.ledger` /
+ * `ctx.courier` / `ctx.mandate` / `ctx.roster` / `ctx.agents` typed access.
+ *
+ * On the cordis migration the `declare module` target moved from the legacy
+ * `./framework` shim to the real `@deepseek-ai/cordis` package.
  *
  * @module @dfh/honeycomb/context
  */
@@ -14,7 +16,7 @@ import type { MandateService } from './services/mandate'
 import type { RosterService } from './services/roster'
 import type { AgentsRuntime } from './runtime/native-runtime'
 
-declare module './framework' {
+declare module '@deepseek-ai/cordis' {
   interface Context {
     hive: HiveService
     ledger: LedgerService

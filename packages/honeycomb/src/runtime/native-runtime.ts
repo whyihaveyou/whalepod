@@ -7,7 +7,7 @@
  * @module @dfh/honeycomb/runtime/native-runtime
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import type { MemberRuntime, RuntimeHatchInput, RuntimeHandle } from './registry'
 
 /** 原生 agent runtime 需满足的契约（由 harness 提供，见 `context.ts` 的 `agents`）。 */

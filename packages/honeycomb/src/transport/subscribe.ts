@@ -12,7 +12,7 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Context, Disposable } from '../framework'
+import type { Context, Disposable } from '@deepseek-ai/cordis'
 import type { WsConn, WsMessage } from './types'
 
 /** 广播订阅 sentinel。 */

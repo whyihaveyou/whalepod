@@ -5,10 +5,14 @@
  * 变更通过事实日志落地（`member-registered` / `member-status` /
  * `member-dismissed`），派生视图（`state`）不落库（§7.3）。
  *
+ * 迁移到真实 cordis：实现形态由工厂函数改为 `Service` 子类（`super(ctx,
+ * 'roster')` 自动注册 `ctx.roster`），公开接口与行为不变；`ctx.onDispose`
+ * 映射为 `ctx.effect`。
+ *
  * @module @dfh/honeycomb/services/roster
  */
 
-import type { Context } from '../framework'
+import { Service, type Context } from '@deepseek-ai/cordis'
 import { makeId, now } from '../util'
 import type { FactStore } from '../persistence/store'
 import type { MemberRuntime, RuntimeMessage, RuntimeRegistry } from '../runtime/registry'
@@ -68,12 +72,20 @@ function deriveWorkState(status: MemberStatus): WorkState {
   }
 }
 
-export function createRosterService(ctx: Context, deps: RosterServiceDeps): RosterService {
-  const { store, runtimes } = deps
-  const fibers = new FiberHost()
-  ctx.onDispose(() => void fibers.disposeAll())
+export class HoneycombRosterService extends Service implements RosterService {
+  private readonly fibers = new FiberHost()
 
-  async function register(hiveId: HiveId, input: RegisterMemberInput): Promise<Member> {
+  constructor(
+    ctx: Context,
+    private readonly store: FactStore,
+    private readonly runtimes: RuntimeRegistry,
+  ) {
+    super(ctx, 'roster')
+    // 迁移：ctx.onDispose(() => void fibers.disposeAll()) → ctx.effect(disposer)
+    ctx.effect(() => () => void this.fibers.disposeAll(), '@dfh/honeycomb/roster.dispose')
+  }
+
+  async register(hiveId: HiveId, input: RegisterMemberInput): Promise<Member> {
     const ts = now()
     const member: Member = {
       id: makeId('member'),
@@ -87,30 +99,40 @@ export function createRosterService(ctx: Context, deps: RosterServiceDeps): Rost
       createdAt: ts,
       updatedAt: ts,
     }
-    await store.append(hiveId, { type: 'member-registered', member, at: ts })
+    await this.store.append(hiveId, { type: 'member-registered', member, at: ts })
     return member
   }
 
-  async function hatch(hiveId: HiveId, input: HatchMemberInput): Promise<Member> {
-    const member = await register(hiveId, { ...input, role: input.role ?? 'worker' })
-    ctx.emit('member/status', { hiveId, memberId: member.id, status: 'hatching' })
+  async hatch(hiveId: HiveId, input: HatchMemberInput): Promise<Member> {
+    const member = await this.register(hiveId, { ...input, role: input.role ?? 'worker' })
+    this.ctx.emit('member/status', { hiveId, memberId: member.id, status: 'hatching' })
 
-    const runtime = runtimes.get(input.backend)
+    const runtime = this.runtimes.get(input.backend)
     if (!runtime) {
       // 后端未注册：注册为被动槽位（无运行时），孵化视为 no-op。
-      ctx.emit('member/hatched', { hiveId, member: store.member(member.id) ?? member })
-      return store.member(member.id) ?? member
+      this.ctx.emit('member/hatched', { hiveId, member: this.store.member(member.id) ?? member })
+      return this.store.member(member.id) ?? member
     }
 
-    const cwd = input.cwd ?? store.hive(hiveId)?.workspace ?? ''
+    const cwd = input.cwd ?? this.store.hive(hiveId)?.workspace ?? ''
     try {
-      const handle = await runtime.hatch(ctx, { member, cwd, env: {} })
-      fibers.adopt(member.id, handle)
-      await store.append(hiveId, { type: 'member-status', memberId: member.id, status: 'idle', at: now() })
-      ctx.emit('member/status', { hiveId, memberId: member.id, status: 'idle' })
+      const handle = await runtime.hatch(this.ctx, { member, cwd, env: {} })
+      this.fibers.adopt(member.id, handle)
+      await this.store.append(hiveId, {
+        type: 'member-status',
+        memberId: member.id,
+        status: 'idle',
+        at: now(),
+      })
+      this.ctx.emit('member/status', { hiveId, memberId: member.id, status: 'idle' })
     } catch (error) {
-      await store.append(hiveId, { type: 'member-status', memberId: member.id, status: 'failed', at: now() })
-      ctx.emit('member/status', {
+      await this.store.append(hiveId, {
+        type: 'member-status',
+        memberId: member.id,
+        status: 'failed',
+        at: now(),
+      })
+      this.ctx.emit('member/status', {
         hiveId,
         memberId: member.id,
         status: 'failed',
@@ -118,66 +140,61 @@ export function createRosterService(ctx: Context, deps: RosterServiceDeps): Rost
       })
     }
 
-    ctx.emit('member/hatched', { hiveId, member: store.member(member.id) ?? member })
-    return store.member(member.id) ?? member
+    this.ctx.emit('member/hatched', { hiveId, member: this.store.member(member.id) ?? member })
+    return this.store.member(member.id) ?? member
   }
 
-  return {
-    register,
-    hatch,
+  async list(hiveId: HiveId): Promise<Member[]> {
+    return this.store.membersOf(hiveId).filter((member) => !this.store.isDismissed(member.id))
+  }
 
-    async list(hiveId) {
-      return store.membersOf(hiveId).filter((member) => !store.isDismissed(member.id))
-    },
+  async get(_hiveId: HiveId, id: MemberId): Promise<Member | undefined> {
+    return this.store.member(id)
+  }
 
-    async get(_hiveId, id) {
-      return store.member(id)
-    },
+  async remove(hiveId: HiveId, id: MemberId): Promise<void> {
+    await this.fibers.dispose(id)
+    await this.store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
+    this.ctx.emit('member/dismissed', { hiveId, memberId: id })
+  }
 
-    async remove(hiveId, id) {
-      await fibers.dispose(id)
-      await store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
-      ctx.emit('member/dismissed', { hiveId, memberId: id })
-    },
+  async rename(hiveId: HiveId, id: MemberId, name: string): Promise<void> {
+    if (!this.store.member(id)) throw new Error(`member not found: ${id}`)
+    await this.store.append(hiveId, { type: 'member-renamed', memberId: id, name, at: now() })
+  }
 
-    async rename(hiveId, id, name) {
-      if (!store.member(id)) throw new Error(`member not found: ${id}`)
-      await store.append(hiveId, { type: 'member-renamed', memberId: id, name, at: now() })
-    },
+  async dismiss(hiveId: HiveId, id: MemberId): Promise<void> {
+    await this.fibers.dispose(id)
+    await this.store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
+    this.ctx.emit('member/dismissed', { hiveId, memberId: id })
+  }
 
-    async dismiss(hiveId, id) {
-      await fibers.dispose(id)
-      await store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
-      ctx.emit('member/dismissed', { hiveId, memberId: id })
-    },
+  async state(_hiveId: HiveId, id: MemberId): Promise<MemberStateView> {
+    const member = this.store.member(id)
+    if (!member) throw new Error(`member not found: ${id}`)
+    const workState = deriveWorkState(member.status)
+    return {
+      memberId: id,
+      status: member.status,
+      workState,
+      blockedReason: workState === 'blocked' ? 'runtime failed' : null,
+      queued: { foreground: 0, background: 0 },
+      activeTurnId: null,
+    }
+  }
 
-    async state(_hiveId, id) {
-      const member = store.member(id)
-      if (!member) throw new Error(`member not found: ${id}`)
-      const workState = deriveWorkState(member.status)
-      return {
-        memberId: id,
-        status: member.status,
-        workState,
-        blockedReason: workState === 'blocked' ? 'runtime failed' : null,
-        queued: { foreground: 0, background: 0 },
-        activeTurnId: null,
-      }
-    },
+  registerRuntime(runtime: MemberRuntime): void {
+    this.runtimes.register(runtime)
+  }
 
-    registerRuntime(runtime) {
-      runtimes.register(runtime)
-    },
+  listRuntimes(): MemberRuntime[] {
+    return this.runtimes.list()
+  }
 
-    listRuntimes() {
-      return runtimes.list()
-    },
-
-    async sendTo(_hiveId, id, message) {
-      const fiber = fibers.get(id)
-      if (!fiber?.handle) return false
-      await fiber.handle.send(message)
-      return true
-    },
+  async sendTo(_hiveId: HiveId, id: MemberId, message: RuntimeMessage): Promise<boolean> {
+    const fiber = this.fibers.get(id)
+    if (!fiber?.handle) return false
+    await fiber.handle.send(message)
+    return true
   }
 }

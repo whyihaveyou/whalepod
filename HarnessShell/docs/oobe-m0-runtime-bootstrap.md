@@ -72,9 +72,14 @@ struct ServiceConfig: Codable {
     // 新增 bundled 字段（可选，仅 embedded 形态用）
     var nodePath: String?      // 内嵌 node 绝对路径（打包时写入，如 Bundle.main .../Resources/runtime/node）
     var dshBinPath: String?    // 内嵌 bin.js 路径（.../Resources/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js）
-    var dshHome: String?       // DSH_HOME，默认 ~/Library/Application Support/HarnessShell/harness
+    var dshHome: String?       // DSH_HOME，默认 ~/Library/Application Support/WhalePod/harness
 }
 ```
+
+> **命名集中（品牌收束前置）**：M0 代码里凡涉及**产品显示名 / Bundle 标识符 / 数据根目录**等将来由品牌收束统一改名的字符串，一律抽成 `AppIdentity` 常量集中（见 §4.1），不散落各处内联。目标值统一：
+> - 数据根：`~/Library/Application Support/WhalePod/`（**英文目录名，避中文路径**；与 Flash-3 M2 对齐）
+> - Bundle 标识符：`io.whalepod.desktop`（由品牌收束统一改）
+> - 显示名：**鲸群 WhalePod**
 
 ### 2.2 命令解析：`StartupCommand.resolve(nodePath:binPath:)`
 
@@ -126,7 +131,7 @@ static func probeEmbedded() -> (node: String, bin: String)? {
 要点（对齐 dsh-desktop）：
 - node 可执行文件：打包的独立 node（`ELECTRON_RUN_AS_NODE` 是 Electron 特供，我们 Swift 壳用**独立 node 二进制**，无需该变量）。
 - bin.js：`node_modules/@deepseek-ai/dsh/lib/bin.js`。
-- 环境：`DSH_HOME` 指到 `~/Library/Application Support/HarnessShell/harness`（数据在 .app 外，见提案 ③）、`NO_COLOR=1`、`PATH` 透传。
+- 环境：`DSH_HOME` 指到 `~/Library/Application Support/WhalePod/harness`（数据在 .app 外，见提案 ③）、`NO_COLOR=1`、`PATH` 透传。
 
 ### 3.3 bundled 形态的直接 argv 启动
 
@@ -189,7 +194,7 @@ WhalePod.app/
 
 **版本锁定**：`@deepseek-ai/dsh@0.1.0-rc.6`（与 refs/dsh-desktop package.json 一致），避免漂移。
 
-**升级安全**：`DSH_HOME`（数据）在 `~/Library/Application Support/HarnessShell/`，不在 .app 内 → 替换 .app 不动数据（提案 ③ 已对齐）。
+**升级安全**：`DSH_HOME`（数据）在 `~/Library/Application Support/WhalePod/`，不在 .app 内 → 替换 .app 不动数据（提案 ③ 已对齐）。
 
 ---
 

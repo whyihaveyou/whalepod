@@ -8,7 +8,7 @@
  * @module @dfh/honeycomb/runtime/registry
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import type { Member } from '../types'
 
 export interface RuntimeMessage {

@@ -13,7 +13,7 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import type { HiveService } from '../services/hive'
 import type { LedgerService } from '../services/ledger'
 import type { CourierService } from '../services/courier'

@@ -5,24 +5,25 @@
  * roster）+ 持久化 + 运行时注册表。原生 `native` 后端在此注册；外部 CLI
  * connector 后端由连接器层通过 `ctx.roster.registerRuntime(...)` 注册。
  *
- * 注：文档 §0/§13 写「6 个服务」，但 §5/§6 只定义了 5 个。第 6 个候选是
- * `MemberRuntime` 命名注册表（§6.2），本实现按 §6.2 以 `ctx.roster
- * .registerRuntime(...)` 暴露，而非独立顶层服务 —— 详见 README 交付说明。
+ * 迁移到真实 cordis：5 个服务改为 `Service` 子类，`super(ctx, name)`
+ * 自动注册 `ctx.hive` / `ctx.ledger` / `ctx.courier` / `ctx.mandate` /
+ * `ctx.roster`；装配点构造它们即可（不再手动 `ctx.provide`）。定时器/订阅
+ * 统一走 `ctx.effect`（含 transport 的 dispose）。
  *
  * @module @dfh/honeycomb/plugin
  */
 
-import type { Context } from './framework'
+import { type Context } from '@deepseek-ai/cordis'
 import { resolveHoneycombConfig, type HoneycombConfig, type ResolvedHoneycombConfig } from './config'
 import { FactStore, type FactBackend } from './persistence/store'
 import { JsonlFactBackend } from './persistence/jsonl'
 import { RuntimeRegistry } from './runtime/registry'
 import { createNativeRuntime } from './runtime/native-runtime'
-import { createRosterService } from './services/roster'
-import { createHiveService } from './services/hive'
-import { createLedgerService } from './services/ledger'
-import { createCourierService } from './services/courier'
-import { createMandateService } from './services/mandate'
+import { HoneycombRosterService } from './services/roster'
+import { HoneycombHiveService } from './services/hive'
+import { HoneycombLedgerService } from './services/ledger'
+import { HoneycombCourierService } from './services/courier'
+import { HoneycombMandateService } from './services/mandate'
 import { createNodeTransportServer } from './transport/server'
 
 export const name = 'honeycomb'
@@ -40,18 +41,12 @@ export async function apply(ctx: Context, config?: HoneycombConfig): Promise<voi
   const runtimes = new RuntimeRegistry()
   runtimes.register(createNativeRuntime(ctx))
 
-  // services (§5.5)
-  const roster = createRosterService(ctx, { store, runtimes })
-  const hive = createHiveService(ctx, { store, roster, config: resolved })
-  const ledger = createLedgerService(ctx, { store })
-  const courier = createCourierService(ctx, { store })
-  const mandate = createMandateService(ctx, { store, config: resolved })
-
-  ctx.provide('hive', hive)
-  ctx.provide('ledger', ledger)
-  ctx.provide('courier', courier)
-  ctx.provide('mandate', mandate)
-  ctx.provide('roster', roster)
+  // services (§5.5) —— Service 子类构造即自注册到 ctx。
+  const roster = new HoneycombRosterService(ctx, store, runtimes)
+  const hive = new HoneycombHiveService(ctx, store, roster, resolved)
+  const ledger = new HoneycombLedgerService(ctx, store)
+  const courier = new HoneycombCourierService(ctx, store)
+  const mandate = new HoneycombMandateService(ctx, store, resolved)
 
   // 可选 transport 网络服务（§transport）：config.transport.enabled = true 时
   // 在 127.0.0.1 起真实 HTTP+WS 监听，前端可直接连接。
@@ -70,9 +65,13 @@ async function startTransportServer(ctx: Context, resolved: ResolvedHoneycombCon
       host: resolved.transport.host,
       port: resolved.transport.port,
     })
-    ctx.onDispose(() => {
-      void server.close().catch(() => {})
-    })
+    // 迁移：ctx.onDispose(...) → ctx.effect(() => () => ...)
+    ctx.effect(
+      () => () => {
+        void server.close().catch(() => {})
+      },
+      '@dfh/honeycomb/transport.dispose',
+    )
     console.log(
       `[honeycomb] transport listening on http://${server.host}:${server.port} (WS: /ws)`,
     )

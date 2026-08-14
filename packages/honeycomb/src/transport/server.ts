@@ -43,7 +43,7 @@ export interface NodeTransportServerHandle {
 
 /** 启动真实 HTTP+WS transport 服务（不启用鉴权时的便捷入口）。 */
 export async function createNodeTransportServer(
-  ctx: import('../framework').Context,
+  ctx: import('@deepseek-ai/cordis').Context,
   options: NodeTransportServerOptions = {},
 ): Promise<NodeTransportServerHandle> {
   const transport = createHoneycombTransport(ctx)

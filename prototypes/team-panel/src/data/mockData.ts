@@ -139,8 +139,8 @@ export const mockTasks: Task[] = [
     createdBy: "Aion CLI",
     startedAt: now - 40 * min,
     activity: [
-      { ts: now - 42 * min, actor: "Aion CLI", action: "创建并指派给 视觉-K3-1" },
-      { ts: now - 40 * min, actor: "视觉-K3-1", action: "标记为 in_progress" },
+      { id: "evt-1", ts: now - 42 * min, actor: "Aion CLI", action: "创建并指派给 视觉-K3-1" },
+      { id: "evt-2", ts: now - 40 * min, actor: "视觉-K3-1", action: "标记为 in_progress" },
     ],
   },
   {
@@ -153,8 +153,8 @@ export const mockTasks: Task[] = [
     createdBy: "Aion CLI",
     completedAt: now - 58 * min,
     activity: [
-      { ts: now - 3 * 60 * min, actor: "Aion CLI", action: "创建并指派给 视觉-K3-1" },
-      { ts: now - 58 * min, actor: "视觉-K3-1", action: "标记为 completed" },
+      { id: "evt-3", ts: now - 3 * 60 * min, actor: "Aion CLI", action: "创建并指派给 视觉-K3-1" },
+      { id: "evt-4", ts: now - 58 * min, actor: "视觉-K3-1", action: "标记为 completed" },
     ],
   },
   {
@@ -167,7 +167,7 @@ export const mockTasks: Task[] = [
     createdBy: "Aion CLI",
     blockedBy: ["#019ffffd"],
     activity: [
-      { ts: now - 20 * min, actor: "Aion CLI", action: "创建并指派给 工程-Flash-2" },
+      { id: "evt-5", ts: now - 20 * min, actor: "Aion CLI", action: "创建并指派给 工程-Flash-2" },
     ],
   },
   {
@@ -179,7 +179,7 @@ export const mockTasks: Task[] = [
     createdAt: now - 21 * min,
     createdBy: "Aion CLI",
     activity: [
-      { ts: now - 21 * min, actor: "Aion CLI", action: "创建并指派给 工程-Flash-1" },
+      { id: "evt-6", ts: now - 21 * min, actor: "Aion CLI", action: "创建并指派给 工程-Flash-1" },
     ],
   },
   {
@@ -192,8 +192,8 @@ export const mockTasks: Task[] = [
     createdBy: "Aion CLI",
     startedAt: now - 10 * min,
     activity: [
-      { ts: now - 12 * min, actor: "Aion CLI", action: "创建并指派给 架构-Pro-2" },
-      { ts: now - 10 * min, actor: "架构-Pro-2", action: "标记为 in_progress" },
+      { id: "evt-7", ts: now - 12 * min, actor: "Aion CLI", action: "创建并指派给 架构-Pro-2" },
+      { id: "evt-8", ts: now - 10 * min, actor: "架构-Pro-2", action: "标记为 in_progress" },
     ],
   },
   {
@@ -205,7 +205,7 @@ export const mockTasks: Task[] = [
     createdAt: now - 9 * min,
     createdBy: "Aion CLI",
     activity: [
-      { ts: now - 9 * min, actor: "Aion CLI", action: "创建并指派给 编排-Pro" },
+      { id: "evt-9", ts: now - 9 * min, actor: "Aion CLI", action: "创建并指派给 编排-Pro" },
     ],
   },
 ];

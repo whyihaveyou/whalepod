@@ -20,7 +20,7 @@
 
 import { WebSocketServer, WebSocket } from 'ws'
 import type { Server as HttpServer } from 'node:http'
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import { SubscribeCenter } from './subscribe'
 import type { WsConn, WsClientMessage, WsMessage } from './types'
 

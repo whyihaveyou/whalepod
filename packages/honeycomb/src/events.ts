@@ -1,11 +1,13 @@
 /**
  * Honeycomb event model (§8).
  *
- * Emit-style events are merged into the framework's `Events` interface via
+ * Emit-style events are merged into cordis's `Events` interface via
  * declaration merging; each key maps to its payload object. The two waterfall
- * hooks (`mandate/decide`, `courier/outgoing`) are reduction chains with
- * explicit input/output types and are *not* part of the emit map — they are
+ * hooks (`mandate/decide`, `courier/outgoing`) are continuation-style chains
  * driven by `ctx.waterfall`, mirroring the harness's `tools/pre-execute` hook.
+ *
+ * On the cordis migration the `declare module` target moved from the legacy
+ * `./framework` shim to the real `@deepseek-ai/cordis` package.
  *
  * @module @dfh/honeycomb/events
  */
@@ -26,30 +28,67 @@ import type {
   WorkState,
 } from './types'
 
-declare module './framework' {
+/** Merge honeycomb's event map into cordis's `Events` for typed emit/on. */
+declare module '@deepseek-ai/cordis' {
   interface Events {
     // 团队
-    'hive/created': { hive: Hive }
-    'hive/renamed': { hiveId: HiveId; name: string }
-    'hive/removed': { hiveId: HiveId }
+    'hive/created'(payload: { hive: Hive }): void
+    'hive/renamed'(payload: { hiveId: HiveId; name: string }): void
+    'hive/removed'(payload: { hiveId: HiveId }): void
 
     // 名册 / 生命周期
-    'member/hatched': { hiveId: HiveId; member: Member }
-    'member/dismissed': { hiveId: HiveId; memberId: MemberId }
-    'member/status': { hiveId: HiveId; memberId: MemberId; status: MemberStatus; note?: string }
-    'member/work-state': { hiveId: HiveId; memberId: MemberId; state: WorkState; blockedReason?: string }
+    'member/hatched'(payload: { hiveId: HiveId; member: Member }): void
+    'member/dismissed'(payload: { hiveId: HiveId; memberId: MemberId }): void
+    'member/status'(payload: {
+      hiveId: HiveId
+      memberId: MemberId
+      status: MemberStatus
+      note?: string
+    }): void
+    'member/work-state'(payload: {
+      hiveId: HiveId
+      memberId: MemberId
+      state: WorkState
+      blockedReason?: string
+    }): void
 
     // 台账
-    'task/created': { task: Task }
-    'task/updated': { task: Task; change: 'status' | 'owner' | 'dependency' | 'description' }
+    'task/created'(payload: { task: Task }): void
+    'task/updated'(payload: { task: Task; change: 'status' | 'owner' | 'dependency' | 'description' }): void
 
     // 信使
-    'message/created': { message: Message }
-    'message/read': { hiveId: HiveId; messageId: MessageId }
+    'message/created'(payload: { message: Message }): void
+    'message/read'(payload: { hiveId: HiveId; messageId: MessageId }): void
+
+    // 连接器（connectors/registry.ts）
+    'connectors/registered'(payload: { id: string }): void
+    'connectors/discovered'(payload: { descriptor: unknown }): void
+    'connectors/cache-invalidated'(payload: { id: string }): void
+
+    // -- waterfall hooks (§8) ---------------------------------------------------
+    /**
+     * `courier/outgoing` — rewrite or drop an outgoing message.
+     * Continuation style: last arg is `next`; return `null` to drop (veto).
+     */
+    'courier/outgoing'(
+      message: OutgoingMessage | null,
+      payload: { hiveId: HiveId; message: OutgoingMessage },
+      next: (m: OutgoingMessage | null) => OutgoingMessage | null,
+    ): OutgoingMessage | null
+
+    /**
+     * `mandate/decide` — audit/override a grant decision.
+     * Return a grant to override, or call `next()` to keep the default.
+     */
+    'mandate/decide'(
+      grant: MandateGrant,
+      payload: { actor: MemberId; action: MandateAction; scope?: MandateScope },
+      next: (g: MandateGrant) => MandateGrant,
+    ): MandateGrant
   }
 }
 
-/** Emit-style event map (mirrors the merged `Events` interface above). */
+/** Emit-style event map (mirrors the merged cordis `Events` interface above). */
 export interface HiveEventMap {
   'hive/created': { hive: Hive }
   'hive/renamed': { hiveId: HiveId; name: string }
@@ -77,11 +116,12 @@ export interface MandateDecidePayload {
   scope?: MandateScope
 }
 
-/** `mandate/decide` listener: reduce a grant, or return `undefined` to pass through. */
+/** `mandate/decide` continuation listener. */
 export type MandateDecideListener = (
   grant: MandateGrant,
   payload: MandateDecidePayload,
-) => MandateGrant | undefined
+  next: (grant: MandateGrant) => MandateGrant,
+) => MandateGrant
 
 /** `courier/outgoing` payload. */
 export interface CourierOutgoingPayload {
@@ -89,8 +129,9 @@ export interface CourierOutgoingPayload {
   message: OutgoingMessage
 }
 
-/** `courier/outgoing` listener: rewrite the outgoing message, return `null` to drop. */
+/** `courier/outgoing` continuation listener. */
 export type CourierOutgoingListener = (
-  message: OutgoingMessage,
+  message: OutgoingMessage | null,
   payload: CourierOutgoingPayload,
-) => OutgoingMessage | null | undefined
+  next: (message: OutgoingMessage | null) => OutgoingMessage | null,
+) => OutgoingMessage | null

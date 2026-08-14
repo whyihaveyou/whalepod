@@ -16,7 +16,7 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import { HoneycombTransport } from './port'
 import type { HttpAdapter, WsAdapter } from './port'
 import { createHoneycombTransport } from './core'

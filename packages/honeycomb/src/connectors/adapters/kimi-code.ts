@@ -3,10 +3,12 @@
  *
  * ## Protocol (measured on host, docs/cli-agent-inventory.md §2)
  *   - Entry:        `kimi` (`~/.kimi-code/bin/kimi`).
- *   - One-shot run: `kimi -p <prompt> --output-format stream-json`
- *     - The prompt is a **trailing argv argument**; `startTxt`/`-p` selects
- *       one-shot mode and `--output-format stream-json` requests NDJSON.
- *       `send()` is deferred so the first string content is appended to argv.
+ *   - One-shot run: `kimi --output-format stream-json -p "<prompt>"`
+ *     - `-p/--prompt <prompt>` takes the prompt as its **value** (measured:
+ *       a trailing-positional prompt makes kimi error `unknown command`);
+ *       `--output-format stream-json` requests NDJSON. `send()` is deferred so
+ *       `-p` is placed last in argv and the first string content becomes its
+ *       value when appended.
  *   - Config dir:   `~/.kimi-code/config.toml` — contains two providers:
  *       `managed:kimi-code` (OAuth to `api.kimi.com`) and `ark`
  *       (API-key to `ark.cn-beijing.volces.com`, default `ark/ark-code-latest`).
@@ -126,8 +128,15 @@ export class KimiCodeAdapter extends BaseAgentAdapter {
     capabilities: this.capabilities,
   }
 
-  /** argv for the one-shot stream-json run; the prompt is appended by `send()`. */
-  protected override spawnArgs: string[] = ['-p', '--output-format', 'stream-json']
+  /**
+   * argv for the one-shot stream-json run; the prompt is appended by `send()`.
+   *
+   * kimi's non-interactive prompt is the **value of `-p/--prompt <prompt>`**
+   * (measured: trailing-positional prompts fail — kimi reports
+   * "unknown command"); so `-p` must sit LAST so the deferSpawn-appended
+   * prompt becomes its value: `kimi --output-format stream-json -p "<prompt>"`.
+   */
+  protected override spawnArgs: string[] = ['--output-format', 'stream-json', '-p']
 
   /**
    * Spawn a live kimi session in deferred mode so `send()` appends the

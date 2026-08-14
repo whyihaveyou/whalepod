@@ -8,7 +8,7 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import { HoneycombTransport } from './port'
 import type { TransportOptions } from './port'
 import { registerAllRoutes } from './router'
