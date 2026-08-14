@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 鲸群 WhalePod · 概念 C：尾鳍声呐（鲸尾没入 + 同心声呐环）
+       意象：鲸潜入深海，声呐环扩散 = 下潜执行 + 消息广播 -->
+  <defs>
+    <radialGradient id="seaC" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#14203A"/>
+      <stop offset="1" stop-color="#0A0F1C"/>
+    </radialGradient>
+    <linearGradient id="flukeC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#seaC)"/>
+
+  <!-- 同心声呐环（下半圆，向上扩散） -->
+  <g fill="none" stroke-linecap="round">
+    <circle cx="512" cy="640" r="120" stroke="#22D3EE" stroke-width="22" opacity="0.9" stroke-dasharray="377 999" transform="rotate(180 512 640)"/>
+    <circle cx="512" cy="640" r="196" stroke="#22D3EE" stroke-width="18" opacity="0.5" stroke-dasharray="616 999" transform="rotate(180 512 640)"/>
+    <circle cx="512" cy="640" r="272" stroke="#7A4DFF" stroke-width="15" opacity="0.32" stroke-dasharray="855 999" transform="rotate(180 512 640)"/>
+  </g>
+
+  <!-- 鲸尾鳍 v2（后视双叶，中央凹口朝上，叶尖外展下垂） -->
+  <g transform="translate(512,545) scale(4.2) translate(-50,-50)" fill="url(#flukeC)">
+    <path d="M 50 30
+             C 46 38 40 44 30 47
+             C 18 51 8 48 2 40
+             C 10 58 26 66 44 68
+             C 47 69 49 70 50 73
+             C 51 70 53 69 56 68
+             C 74 66 90 58 98 40
+             C 92 48 82 51 70 47
+             C 60 44 54 38 50 30 Z"/>
+  </g>
+</svg>

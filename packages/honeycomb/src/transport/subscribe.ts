@@ -59,19 +59,24 @@ export class SubscribeCenter {
     this.conns.delete(conn)
   }
 
-  /** 处理客户端指令（subscribe / unsubscribe / hello）。 */
+  /** 处理客户端指令（subscribe / unsubscribe / hello）；填写 ack 帧。 */
   handleClientMessage(conn: WsConn, msg: any): void {
     if (!msg || typeof msg !== 'object') return
     switch (msg.type) {
       case 'subscribe':
-        if (typeof msg.hiveId === 'string') conn.subscriptions.add(msg.hiveId)
+        if (typeof msg.hiveId === 'string') {
+          conn.subscriptions.add(msg.hiveId)
+          conn.send({ type: 'subscribed', hiveId: msg.hiveId })
+        }
         break
       case 'unsubscribe':
-        if (typeof msg.hiveId === 'string') conn.subscriptions.delete(msg.hiveId)
+        if (typeof msg.hiveId === 'string') {
+          conn.subscriptions.delete(msg.hiveId)
+          conn.send({ type: 'unsubscribed', hiveId: msg.hiveId })
+        }
         break
       case 'hello':
-        // 握手回执：可选。接入端可 here 推送能力声明。
-        conn.send({ topic: 'hello', payload: { ok: true } })
+        conn.send({ type: 'hello', ok: true })
         break
     }
   }
@@ -89,10 +94,10 @@ export class SubscribeCenter {
     while (this.disposers.length) this.disposers.pop()!()
   }
 
-  /** 事件 → 按连接订阅过滤推送。 */
+  /** 事件 → 按连接订阅过滤推送 event 帧。 */
   private broadcast(topic: string, payload: any): void {
     const hiveId = hiveIdOf(topic, payload)
-    const frame: WsMessage = { topic, payload }
+    const frame: WsMessage = { type: 'event', topic, hiveId, payload }
     for (const conn of [...this.conns]) {
       if (conn.subscriptions.has(ANY) || (hiveId !== null && conn.subscriptions.has(hiveId))) {
         conn.send(frame)

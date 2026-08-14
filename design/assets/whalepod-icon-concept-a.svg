@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 鲸群 WhalePod · 概念 A：回声定位鲸（单体鲸 + 声波弧）
+       意象：一头鲸发出回声定位声波 = 单个 agent + 通信/推送 -->
+  <defs>
+    <radialGradient id="seaA" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#14203A"/>
+      <stop offset="1" stop-color="#0A0F1C"/>
+    </radialGradient>
+    <linearGradient id="whaleA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#seaA)"/>
+
+  <!-- 声波弧：从鲸首向右上方扩散（回声定位） -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 668 396 A 120 120 0 0 1 736 512" stroke="#22D3EE" stroke-width="26" opacity="0.9"/>
+    <path d="M 716 348 A 196 196 0 0 1 812 512" stroke="#22D3EE" stroke-width="22" opacity="0.55"/>
+    <path d="M 762 302 A 272 272 0 0 1 886 512" stroke="#7A4DFF" stroke-width="18" opacity="0.38"/>
+  </g>
+
+  <!-- 鲸剪影 v2（几何化，朝右上游动）：身体拉长 + 尾鳍放大并嵌入身体 -->
+  <g transform="translate(238,392) rotate(-8) scale(4.4)" fill="url(#whaleA)">
+    <path d="M 16 56
+             C 14 46 22 36 38 30
+             C 58 22 82 26 92 40
+             C 98 48 96 58 86 64
+             C 68 76 40 76 26 68
+             C 20 64 16 60 16 56 Z"/>
+    <path d="M 18 48 C 8 44 2 34 6 24 C 11 31 16 33 21 33
+             C 19 26 22 19 29 17 C 29 26 31 33 36 38 C 30 43 23 47 18 48 Z"/>
+  </g>
+</svg>

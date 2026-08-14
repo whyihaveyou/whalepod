@@ -125,7 +125,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
   const idleTimeoutMs = config.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
   const maxDispatchAttempts = config.maxDispatchAttempts ?? DEFAULT_MAX_DISPATCH_ATTEMPTS
 
-  const listeners: Array<{ dispose(): void }> = []
+  const listeners: Array<() => void> = [] // 订阅释放器（ctx.on 返回 `() => void`，interval 同理）
   const eventListeners: Array<(e: LoopEvent) => void> = []
   let started = false
   let timerHandle: unknown
@@ -169,6 +169,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     // idle 超时扫描
     if (idleTimeoutMs > 0) {
       timerHandle = setTimer(() => void sweepIdle(), Math.min(idleTimeoutMs, 30_000))
+      listeners.push(() => clearTimer(timerHandle))
     }
   }
 
@@ -313,9 +314,8 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
       subscribe()
     },
     stop() {
-      for (const l of listeners) l.dispose()
+      for (const l of listeners) l()
       listeners.length = 0
-      if (timerHandle !== undefined) clearTimer(timerHandle)
       timerHandle = undefined
       started = false
     },

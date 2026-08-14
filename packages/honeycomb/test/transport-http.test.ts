@@ -45,11 +45,14 @@ async function main(): Promise<void> {
     const listed = (await listRes.json()) as any
     assert.ok(listed.data.some((h: any) => h.id === hiveId))
 
-    // ---- 2. WS: subscribe + trigger event + receive push -----------------
+    // ---- 2. WS: subscribe (await ack) + trigger event + receive push -------
     const ws = new WebSocket(wsUrl)
     await onceOpen(ws)
+    ws.on('message', (d) => console.log('DBG recv:', d.toString()))
 
     ws.send(JSON.stringify({ type: 'subscribe', hiveId }))
+    // 等待订阅 ack，确保服务端已生效（消除「订阅 vs 事件」竞态）。
+    await waitForFrame(ws, (m) => m.type === 'subscribed' && m.hiveId === hiveId)
 
     // 触发事件：给 hive 建一个 task（内部 emit task/created）。
     const taskRes = await fetch(`${baseUrl}/v1/hives/${hiveId}/tasks`, {
@@ -59,7 +62,7 @@ async function main(): Promise<void> {
     })
     assert.equal(taskRes.status, 200)
 
-    const frame = await waitForFrame(ws, 'task/created')
+    const frame = await waitForFrame(ws, (m) => m.type === 'event' && m.topic === 'task/created')
     assert.equal(frame.hiveId, hiveId)
     assert.equal(frame.topic, 'task/created')
     assert.equal((frame.payload as any).task.hiveId, hiveId)
@@ -80,12 +83,12 @@ function onceOpen(ws: WebSocket): Promise<void> {
   })
 }
 
-/** 等待某个 topic 的 event 帧（含超时保护）。 */
-function waitForFrame(ws: WebSocket, topic: string, timeoutMs = 5000): Promise<any> {
+/** 等待匹配某个帧（含超时保护）。 */
+function waitForFrame(ws: WebSocket, match: (msg: any) => boolean, timeoutMs = 5000): Promise<any> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       ws.off('message', onMsg)
-      reject(new Error(`timeout waiting for event "${topic}"`))
+      reject(new Error('timeout waiting for ws frame'))
     }, timeoutMs)
     function onMsg(data: WebSocket.RawData): void {
       let msg: any
@@ -94,7 +97,7 @@ function waitForFrame(ws: WebSocket, topic: string, timeoutMs = 5000): Promise<a
       } catch {
         return
       }
-      if (msg && msg.type === 'event' && msg.topic === topic) {
+      if (msg && match(msg)) {
         clearTimeout(timer)
         ws.off('message', onMsg)
         resolve(msg)

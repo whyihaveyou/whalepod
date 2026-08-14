@@ -41,7 +41,7 @@ export class RealWsConn implements WsConn {
 
   send(msg: WsMessage): void {
     if (this.closed || this.socket.readyState !== WebSocket.OPEN) return
-    this.socket.send(JSON.stringify({ type: 'event', topic: msg.topic, hiveId: null, payload: msg.payload }))
+    this.socket.send(JSON.stringify(msg))
   }
 
   close(): void {

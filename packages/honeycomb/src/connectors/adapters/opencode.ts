@@ -63,7 +63,7 @@ function inputToolName(input: unknown): string | null {
 }
 
 /** Normalize a single opencode NDJSON stdout line into SessionEvents. */
-const openCodeNormalizer: NormalizeLine = (line) => {
+export const openCodeNormalizer: NormalizeLine = (line) => {
   const frame = tryParseJson<OpenCodeFrame>(line)
   if (!frame) return null // banner / non-JSON line
 
