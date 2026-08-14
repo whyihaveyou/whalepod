@@ -60,14 +60,6 @@ export interface StdioSessionOptions extends SpawnContext {
    * positional argument rather than a stdin frame.
    */
   deferSpawn?: boolean
-  /**
-   * When `true`, deliver the first string `SessionInput.content` to the agent
-   * as **plain text on stdin** (then close stdin), instead of appending it to
-   * argv. Use for one-shot agents that read their prompt from stdin (e.g.
-   * codex `exec`, which reports "Reading prompt from stdin"). Requires
-   * `deferSpawn: true`.
-   */
-  promptViaStdin?: boolean
 }
 
 /**
@@ -126,10 +118,8 @@ export class StdioSession implements AgentSession {
     // argument rather than via stdin. Measured on host: leaving the piped
     // stdin open makes agents like `opencode run` block waiting for stdin EOF
     // (no output for 60s+). Close stdin immediately so the process runs its
-    // one-shot command without waiting for a stdin prompt. Exception:
-    // `promptViaStdin` agents read their prompt from stdin, so leave stdin
-    // open and let `send()` write the prompt then end stdin.
-    if (this.opts.deferSpawn && !this.opts.promptViaStdin) child.stdin.end()
+    // one-shot command without waiting for a stdin prompt.
+    if (this.opts.deferSpawn) child.stdin.end()
 
     child.on('close', (code) => {
       // Flush any trailing line without a newline.

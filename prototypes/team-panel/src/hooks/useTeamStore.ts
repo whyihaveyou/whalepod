@@ -19,14 +19,33 @@ import type {
 } from "../types";
 import type { TeamApi } from "../services/api";
 import { MockApi, statusText } from "../services/mockApi";
+import { createHoneycombApi } from "../services/honeycombApi";
 
 export class TeamStore {
   constructor(readonly api: TeamApi) {}
 }
 
+/**
+ * 数据源切换开关：
+ * - VITE_TEAM_API=honeycomb → 走 createHoneycombApi（默认 localHoneycombClient 同构后端，
+ *   cordis 迁移 + 真 server 联调绿后可传 httpUrl/wsUrl 切真连接，见 honeycombApi.ts 头注）；
+ * - 缺省 mock，保证原型独立可跑。
+ */
+function buildApi(): TeamApi {
+  const env = import.meta.env;
+  if (env.VITE_TEAM_API === "honeycomb") {
+    return createHoneycombApi({
+      httpUrl: env.VITE_HONEYCOMB_HTTP ?? "http://127.0.0.1:4800",
+      wsUrl: env.VITE_HONEYCOMB_WS ?? "ws://127.0.0.1:4801",
+      hiveId: env.VITE_HONEYCOMB_HIVE ?? "hive-dev",
+    });
+  }
+  return new MockApi();
+}
+
 let _instance: TeamStore | null = null;
 export function useTeamApi(): TeamApi {
-  if (!_instance) _instance = new TeamStore(new MockApi());
+  if (!_instance) _instance = new TeamStore(buildApi());
   return _instance.api;
 }
 

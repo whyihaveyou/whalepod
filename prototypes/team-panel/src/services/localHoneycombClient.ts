@@ -26,6 +26,9 @@ import type {
   LocalTopic, LocalHiveId, LocalMemberId, LocalTaskId, LocalMessageId,
 } from './transportDto'
 
+// honeycombApi.ts 从本模块引 LocalTopic（与 client.on 的 topic 参数同源）
+export type { LocalTopic } from './transportDto'
+
 // ---------- 构造参数（对齐 HoneycombClientOptions） ----------
 export interface LocalHoneycombClientOptions {
   httpUrl: string

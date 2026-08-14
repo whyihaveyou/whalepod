@@ -92,7 +92,11 @@ export class NodeHttpAdapter {
         body: body ? safeJson(body) : undefined,
       }
 
+      // [DEBUG] transport request tracing
+      const __t0 = Date.now()
+      process.stderr.write(`[http] >> ${httpReq.method} ${httpReq.path} q=${JSON.stringify(httpReq.query)}\n`)
       const httpRes = await this.transport.dispatch(httpReq)
+      process.stderr.write(`[http] << ${httpReq.method} ${httpReq.path} -> ${httpRes.status} in ${Date.now() - __t0}ms\n`)
       const payload = JSON.stringify(httpRes.body)
       res.writeHead(httpRes.status, {
         'Content-Type': 'application/json; charset=utf-8',

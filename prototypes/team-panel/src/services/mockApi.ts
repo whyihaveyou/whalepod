@@ -241,7 +241,7 @@ export class MockApi implements TeamApi {
         assignee.workingSince = undefined;
       }
     }
-    t.activity.push({ ts: now(), actor: "Aion CLI", action: `标记为 ${status}` });
+    t.activity.push({ id: `evt-${uid()}`, ts: now(), actor: "Aion CLI", action: `标记为 ${status}` });
     this.pushActivity(
       {
         kind: status === "completed" ? "task_done" : "task_start",
@@ -266,6 +266,7 @@ export class MockApi implements TeamApi {
       createdBy: "Aion CLI",
       activity: [
         {
+          id: `evt-${uid()}`,
           ts: now(),
           actor: "Aion CLI",
           action: assigneeId
