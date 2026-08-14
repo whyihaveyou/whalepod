@@ -187,19 +187,10 @@ export class StdioSession implements AgentSession {
   async send(input: SessionInput): Promise<void> {
     if (this.opts.deferSpawn) {
       if (!this.spawned) {
+        // Prompt is a trailing argv argument.
         const prompt = typeof input.content === 'string' ? input.content : ''
-        if (this.opts.promptViaStdin) {
-          // Prompt goes on stdin as plain text (e.g. codex `exec` reports
-          // "Reading prompt from stdin"). Keep stdin open until written, then
-          // close it so the process runs its one-shot command.
-          this.ensureSpawned()
-          if (prompt) this.child!.stdin.write(prompt + '\n')
-          this.child!.stdin.end()
-        } else {
-          // Prompt is a trailing argv argument.
-          if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
-          this.ensureSpawned()
-        }
+        if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
+        this.ensureSpawned()
       }
       // One-shot agent: prompt already delivered; further sends are no-ops.
       return
