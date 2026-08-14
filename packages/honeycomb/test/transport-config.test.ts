@@ -54,7 +54,7 @@ async function main(): Promise<void> {
 
     console.log(`✅ config-driven transport auto-started on :${port} (REST+WS)`)
   } finally {
-    await ctx.dispose() // 应自动 close server
+    await ctx.fiber.dispose() // cordis 根上下文释放（迁移：ctx.dispose() → ctx.fiber.dispose()），应自动 close server
   }
 }
 

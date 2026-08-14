@@ -73,6 +73,7 @@ export interface LocalHoneycombClient {
   mandate: LocalMandateApi
   readonly connected: boolean
   connect(): Promise<void>
+  reconnect(): Promise<void>
   subscribe(hiveId: string): Promise<void>
   unsubscribe(hiveId: string): Promise<void>
   on(topic: LocalTopic, handler: (payload: unknown) => void): () => void

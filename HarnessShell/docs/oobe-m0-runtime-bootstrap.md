@@ -168,6 +168,35 @@ MainWindowController 的失败覆盖层展示**引导文案**（装 node / 或�
 3. `performStart/startNewProcess` 先调 `RuntimeProbe.resolve(...)`，按探测结果启动或报错。
 4. `buildCommandLine()` 仅 shell 形态使用（保留）；bundled 形态绕过它直接构 argv。
 
+### 4.1 命名集中：`AppIdentity` 常量（品牌收束前置）
+
+凡是**将来由【品牌收束 WhalePod】统一改名**的字符串，不散落内联，集中在一个常量对象里，
+实施 M0 / 品牌收束时只需改一处。建议位置：`Sources/HarnessShell/AppIdentity.swift`（新文件）。
+
+```swift
+enum AppIdentity {
+    /// 数据/配置根目录（英文目录名，避中文路径坑）。与 Flash-3 的 M2 对齐。
+    static let applicationSupportDir = "WhalePod"          // ~/Library/Application Support/WhalePod/
+    /// Bundle 标识符（品牌收束统一改 io.whalepod.desktop）
+    static let bundleIdentifier = "io.whalepod.desktop"
+    /// 产品显示名（品牌收束统一改「鲸群 WhalePod」）
+    static let displayName = "WhalePod"
+
+    static var applicationSupportBase: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent(applicationSupportDir, isDirectory: true)
+    }
+}
+```
+
+M0 中的使用点一律经 `AppIdentity.xxx` 取：
+- `dshHome` 默认值 = `AppIdentity.applicationSupportBase/harness`（DSH_HOME）
+- ServiceConfig 配置路径 / SingleInstance 锁目录 / NSRunningApplication bundleID / 日志前缀
+  → 全部收敛到 `AppIdentity`（SingleInstance 锁名当前用 `com.aion2dsh.HarnessShell`，收束后改 `io.whalepod.desktop`）。
+
+这样品牌收束执行时，壳层/深链/路径/包名处只动少数常量定义 + 深链 scheme，不逐点扫字符串。
+
 ---
 
 ## 5. 打包集成方案（本阶段不实做，仅说明）
@@ -214,6 +243,6 @@ WhalePod.app/
 | `dshEntryPath()` → `Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js` | `Resources/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js` |
 | `buildNodeArguments = ['--expose-internals', dshEntryPath, 'web', '--host','127.0.0.1','--port', N]` | `[binPath, 'web', '--host','127.0.0.1','--port', N]`（--expose-internals 视需） |
 | `reservePort()` 内核 socket 预占 | 已有 `--port 0` 自动端口 |
-| `DSH_HOME = userData/harness` | `~/Library/Application Support/HarnessShell/harness` |
+| `DSH_HOME = userData/harness` | `~/Library/Application Support/WhalePod/harness` |
 | `existsSync(dshEntryPath)` 前置校验 → failed | `FileManager.fileExists` → `.unavailable` / `.failed` 明确报错 |
 | `stdio: ['pipe','pipe','pipe']` + stdout 读端口 | 现有 `posix_spawn` stdout 管道 + `parsePort`（`--port 0` stdout 布局一致） |

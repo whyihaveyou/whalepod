@@ -60,6 +60,14 @@ export interface StdioSessionOptions extends SpawnContext {
    * positional argument rather than a stdin frame.
    */
   deferSpawn?: boolean
+  /**
+   * When `true`, deliver the first string `SessionInput.content` to the agent
+   * as **plain text on stdin** (then close stdin), instead of appending it to
+   * argv. Use for one-shot agents that read their prompt from stdin (e.g.
+   * codex `exec`, which reports "Reading prompt from stdin"). Requires
+   * `deferSpawn: true`.
+   */
+  promptViaStdin?: boolean
 }
 
 /**
@@ -118,8 +126,10 @@ export class StdioSession implements AgentSession {
     // argument rather than via stdin. Measured on host: leaving the piped
     // stdin open makes agents like `opencode run` block waiting for stdin EOF
     // (no output for 60s+). Close stdin immediately so the process runs its
-    // one-shot command without waiting for a stdin prompt.
-    if (this.opts.deferSpawn) child.stdin.end()
+    // one-shot command without waiting for a stdin prompt. Exception:
+    // `promptViaStdin` agents read their prompt from stdin, so leave stdin
+    // open and let `send()` write the prompt then end stdin.
+    if (this.opts.deferSpawn && !this.opts.promptViaStdin) child.stdin.end()
 
     child.on('close', (code) => {
       // Flush any trailing line without a newline.
@@ -188,10 +198,20 @@ export class StdioSession implements AgentSession {
     if (this.opts.deferSpawn) {
       if (!this.spawned) {
         const prompt = typeof input.content === 'string' ? input.content : ''
-        if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
-        this.ensureSpawned()
+        if (this.opts.promptViaStdin) {
+          // Prompt goes on stdin as plain text (e.g. codex `exec` reports
+          // "Reading prompt from stdin"). Keep stdin open until written, then
+          // close it so the process runs its one-shot command.
+          this.ensureSpawned()
+          if (prompt) this.child!.stdin.write(prompt + '\n')
+          this.child!.stdin.end()
+        } else {
+          // Prompt is a trailing argv argument.
+          if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
+          this.ensureSpawned()
+        }
       }
-      // One-shot agent: stdin is closed at spawn; further sends are no-ops.
+      // One-shot agent: prompt already delivered; further sends are no-ops.
       return
     }
     this.ensureSpawned()

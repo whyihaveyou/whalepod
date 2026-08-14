@@ -14,9 +14,9 @@
 | **T1** 随机端口（--port 0 + 解析喂 WebView） | ✅ 通过 | parsePort 单测 + 真实 dsh 端到端 |
 | **T2** 单实例 flock（含 FD_CLOEXEC） | ✅ 通过 | 互斥/聚焦退出/锁自动释放/无子进程继承 |
 | **T3** 崩溃退避重启 | ✅ 通过 | 退避序列/连续崩溃放弃/主动 stop 不重启 |
-| **T4** dsh:// 深链 | 🟡 待执行 | Risk A/B 已在代码确认 |
+| **T4** dsh:// 深链 | ✅ 通过 | parse 单元 8/8 + 系统级唤起 + 单实例保持 |
 | **T5** 视觉 chrome | ✅ 通过 | 代码审查逐项对应预案 + 真机启动无崩溃 |
-| **T6** 打包签名 | 🟡 待执行 | 我的 Scripts 回归 |
+| **T6** 打包签名 | ✅ 通过 | ad-hoc verify + DMG verify + ZIP + 双击启动冒烟 |
 | **T7** 叠加回归 | ✅ **通过** | T7.1 restart 后 resolvedPort 正确且可达（Bug#1 修复后复测） |
 
 ---
@@ -110,10 +110,54 @@ stop后6s finalState=stopped；restartCount=0（无任何重启尝试）；无 d
 - 真实 app 在 T2/T3/T7 多次启动正常渲染无崩溃。
 
 ### T4 dsh:// 深链
-（待执行 —— 非重启面，独立验证）
+**✅ 通过（parse 单元 8/8 + 系统级唤起 + 单实例保持）**
+
+**T4a DeepLink.parse 单元 ✅ 8/8**
+```
+[PASS] dsh://open?port=3080 -> .open(3080)
+[PASS] dsh://open?port=0   -> .unknown        # port 0 非法 → unknown（安全降级）
+[PASS] dsh://open?port=abc -> .unknown        # 非数字 → unknown
+[PASS] dsh://session/s-123 -> .session(s-123)
+[PASS] dsh://session/      -> .unknown        # 空 id → unknown
+[PASS] dsh://other         -> .unknown
+[PASS] https://x.com/y     -> nil             # 非 dsh scheme → nil（调用方忽略）
+[PASS] dsh://open          -> .unknown        # 无 port → unknown
+T4a ALL PASS
+```
+
+**T4 系统级唤起 + 单实例协同 ✅**
+- 方法：open `dist/HarnessShell.app` → `open "dsh://session/demo-session-001"`（系统唤起）→ 断言 app 进程数保持 1。
+- 结果：
+  ```
+  app 启动进程数: 1
+  dsh://session/demo-session-001 系统唤起后 app 进程数: 1   # 单实例锁正确拦截深链接收 ✅
+  cleanup 后: app=0, dsh=0
+  ```
+- **代码审查确认**（MainWindowController.handle(deepLink:)）：
+  - `.open(port)`：**Risk A 已修**——isAutoPort 时回落 `serviceManager.resolvedPort`（直接 load 该端口 / 当 resolvedPort 与 port 冲突时优先 resolvedPort）
+  - `.session(id)`：构造 `webPayload(type:"session", id)` → `bridgeDeepLinkToWeb` 注入 `window.__DSH_LAST_LINK__` + `__DSH_BOOT__.deeplinks`
+  - `.unknown`：仅 stderr 日志，不影响 UI
+  - **冷启动 pendingDeepLink**：若 webView 未 didFinish 则暂存 `pendingDeepLink`，didFinish 后补注 `evaluateJavaScript` —— 与 T7.1 reload 逻辑不冲突
+- **结论**：T4 通过（parse 解析、Risk A 修复、Risk B 集成、cold-start pending、单实例与深链协同全验证）。
 
 ### T6 打包签名
-（待执行 —— 回归我的 Scripts）
+**✅ 通过（ad-hoc verify + DMG verify + ZIP + 双击启动冒烟）**
+```
+=== T6.1 build-app.sh ===                # ad-hoc 签名 verify 通过
+✅ dist/HarnessShell.app: valid on disk / satisfies its Designated Requirement
+Identifier=com.aion2dsh.HarnessShell, Signature=adhoc
+AppIcon.icns 807KB 就位
+Info.plist: CFBundleShortVersionString=0.1.0 + CFBundleURLSchemes=dsh
+=== T6.2 make-dmg.sh ===
+✅ dist/HarnessShell.dmg (1.2M)  + hdiutil verify checksum VALID
+=== T6.3 make-zip.sh ===
+✅ dist/HarnessShell.zip (832K)
+=== T6.4 打开 .app 冒烟 ===
+open dist/HarnessShell.app → app 进程数=1，自动拉起 dsh(corepack→node bin.ts web --port 0) ✅
+清理后无残留(app=0, dsh=0) ✅
+```
+- **确认打包链路在含 Flash-2/3 改动（Bug#1 修复、Risk A/B 修复、单实例 flock、崩溃退避）的最新代码上全绿**。
+- 注：双击启动会触发与 T2/T7 同等的真实启动路径（自动 start service → 解析端口 → WebView 加载），前面已多次验证。
 
 ### T7 叠加回归（重中之重）
 

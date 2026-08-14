@@ -1,23 +1,24 @@
-# DFH Workstation 视觉识别规范 v0.1
+# 鲸群 WhalePod 视觉识别规范 v0.2
 
-适用范围：DFH Workstation 桌面壳 MVP、团队面板（Team Panel）及衍生宣传物料。
+适用范围：鲸群（WhalePod，DeepSeek Harness 桌面壳）MVP、团队面板（Team Panel）及衍生宣传物料。
 本文档定义：品牌标志（app 图标）、配色系统、字体配对、深色/浅色主题 tokens。
 图标源文件见 `assets/`（SVG 为主源文件，任何栅格导出均从 SVG 生成）。
+
+> v0.2：产品定名「鲸群 WhalePod」，标志由 "W" 节点图更换为**三豚环逐**（用户以生成稿 `assets/whalepod-icon-user-ref.png` 定稿，矢量化重绘落地，源文件 `assets/whalepod-icon-final.svg`）。
 
 ---
 
 ## 1. 设计概念
 
-DFH Workstation 是 DeepSeek Harness（dsh）的桌面壳：一个容纳多个 agent 协同工作的工作台。
+WhalePod 是 DeepSeek Harness（dsh）的桌面壳：一个容纳多个 agent 协同工作的工作台（pod = 鲸群，亦呼应有壳动物的"壳"）。
 
-标志图形是一条**节点连线构成的 "W"**：
+标志图形是**三头鲸豚首尾相逐成环**（120° 旋转对称）：
 
-- 五个顶点 = 一组 agent（一个团队）；
-- 连线 = harness（挽具/框架）把 agent 们连成整体；
-- 正中央顶点是一颗菱形火花（spark），与其余四个圆点区分——代表工作站上被调度、被点亮的那一个活跃 agent；
-- 整体同时读作 "W"（Workstation）与一张小型 agent 网络拓扑图。
+- 三头 = 多智能体群体（pod），首尾相逐 = 消息传递与接力执行（agent loop / transport 推送）；
+- 环 = 持续运转的团队工作流，弧间缺口 = 开放、可加入（spawn）；
+- 白身 + 青沿（生物荧光）+ 深海蓝背三层错位叠印，亮蓝径向渐变底 = 深海。
 
-设计原则：几何、单色可还原、小尺寸不塌。标志在任何场景只用一种颜色（白/品牌渐变/纯黑模板），不做阴影、描边、立体化。
+设计原则：旋转对称、单色可还原、小尺寸不塌。标志在任何场景只用一套色（保真彩色/深底青系/纯黑模板），不做阴影、立体化。
 
 ## 2. 图标系统
 

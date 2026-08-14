@@ -27,6 +27,7 @@ import {
   createLocalHoneycombClient,
   type LocalHoneycombClient,
   type LocalHoneycombClientOptions,
+  type LocalTopic,
 } from "./localHoneycombClient";
 import type {
   LocalMember, LocalTask, LocalMessage, LocalActivityItem, LocalHiveId,
@@ -168,7 +169,7 @@ export function createHoneycombApi(options: HoneycombApiOptions): TeamApi {
 
   /** 每个语言下的「监听器 → 变化通知」，用于触发 store reload。 */
   const listeners = new Set<() => void>();
-  const wsTopics = new Set<string>();
+  const wsTopics = new Set<LocalTopic>();
   let wsSubscribed = false;
 
   function notify(): void {

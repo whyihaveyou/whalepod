@@ -21,7 +21,7 @@
  * @module @dfh/honeycomb/runtime/agent-runtime
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 import type { Member, MemberStatus, WorkState } from '../types'
 import type {
   MemberRuntime,

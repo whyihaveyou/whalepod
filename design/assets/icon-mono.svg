@@ -1,14 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Template / monochrome variant (menu bar, favicon, print).
-       Use currentColor in UI contexts; shown here in solid black. -->
-  <g stroke="#000000" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M 242 350 L 402 660 L 512 450 L 622 660 L 782 350"/>
-  </g>
-  <g fill="#000000">
-    <circle cx="242" cy="350" r="54"/>
-    <circle cx="402" cy="660" r="54"/>
-    <circle cx="622" cy="660" r="54"/>
-    <circle cx="782" cy="350" r="54"/>
-    <path d="M 512 384 L 578 450 L 512 516 L 446 450 Z"/>
+  <!-- 鲸群 WhalePod · icon-mono（单色模板，UI 中绑 currentColor）：三豚环逐
+       参照 whalepod-icon-user-ref.png 矢量重绘：三头鲸/豚首尾相逐成环（120° 旋转对称，弧间留缺口），
+       白身 + 青沿 + 深海蓝背三层错位叠印，亮蓝径向渐变底。
+       单豚为参数化圆弧身体（尾外头内径向倾斜，鼻钝圆，蝶形尾鳍外挂）。 -->
+  <defs>
+    <radialGradient id="tileF" cx="0.5" cy="0.46" r="0.62">
+      <stop offset="0" stop-color="#2B68EA"/>
+      <stop offset="0.65" stop-color="#16409C"/>
+      <stop offset="1" stop-color="#0A1B3A"/>
+    </radialGradient>
+    <linearGradient id="bodyW" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAFBFF"/>
+    </linearGradient>
+    <linearGradient id="rimC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FF0FA"/>
+      <stop offset="1" stop-color="#3FC8EE"/>
+    </linearGradient>
+
+    <path id="dp-body" d="M -221.0 -185.4 L -209.3 -197.5 L -197.3 -209.1 L -184.9 -220.3 L -172.0 -231.0 L -158.5 -241.0 L -144.4 -250.2 L -129.7 -258.3 L -114.4 -265.1 L -98.5 -270.6 L -82.4 -275.4 L -66.4 -280.1 L -50.1 -284.4 L -33.7 -288.1 L -16.9 -290.8 L 0.0 -291.9 L 17.0 -291.4 L 33.8 -289.3 L 50.7 -287.6 L 67.9 -286.3 L 85.2 -284.7 L 102.7 -282.0 L 119.7 -277.5 L 135.9 -270.6 L 150.8 -261.2 L 164.0 -249.4 L 175.9 -236.3 L 187.3 -223.2 L 198.2 -210.1 L 202.4 -191.0 L 207.6 -174.2 A 17.0 17.0 0 0 1 181.6 -152.3 L 168.5 -159.0 L 153.1 -162.3 L 143.1 -170.5 L 132.2 -177.6 L 120.6 -183.4 L 109.2 -189.1 L 98.4 -195.8 L 87.8 -203.6 L 77.2 -212.2 L 66.2 -221.1 L 54.4 -229.4 L 41.7 -236.3 L 28.2 -241.1 L 14.2 -243.7 L 0.0 -246.1 L -14.5 -248.3 L -29.2 -250.2 L -44.3 -251.3 L -59.5 -251.2 L -74.7 -249.6 L -89.6 -246.2 L -104.3 -241.7 L -118.9 -236.8 L -133.6 -231.3 L -148.1 -225.2 L -162.4 -218.2 L -176.4 -210.2 L -189.7 -201.1 L -202.4 -190.9 L -214.1 -179.7 A 4.5 4.5 0 0 1 -221.0 -185.4 Z"/>
+    <path id="dp-fluke" d="M 8 0 C 2 12 -18 32 -60 40 C -45 18 -39 5 -36 0 C -39 -5 -45 -18 -60 -40 C -18 -32 2 -12 8 0 Z"/>
+    <path id="dp-fin" d="M 121.3 -194.0 C 130.6 -178.8 111.5 -167.1 95.0 -163.3 C 94.5 -177.7 100.7 -195.1 121.3 -194.0 Z"/>
+
+    <!-- 单豚：青沿（外扩）→ 蓝背（内缩）→ 白身 → 蝶形尾鳍（尾柄端矩阵定位）→ 胸鳍 -->
+    <g id="dolphin">
+      <use href="#dp-body" fill="#000000"/>
+      <use href="#dp-fluke" transform="matrix(-0.6428 0.7660 -0.7660 -0.6428 -216.0245 -181.2661)" fill="#000000"/>
+      <use href="#dp-fin" fill="#000000"/>
+    </g>
+  </defs>
+
+  
+  <!-- 三豚环逐：120° 旋转对称 -->
+  <g transform="translate(512,512)">
+    <use href="#dolphin"/>
+    <use href="#dolphin" transform="rotate(120)"/>
+    <use href="#dolphin" transform="rotate(240)"/>
   </g>
 </svg>

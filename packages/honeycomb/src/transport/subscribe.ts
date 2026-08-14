@@ -12,14 +12,14 @@
  * @module @dfh/honeycomb/transport
  */
 
-import type { Context, Disposable } from '@deepseek-ai/cordis'
+import type { Context, Disposable, Events } from '@deepseek-ai/cordis'
 import type { WsConn, WsMessage } from './types'
 
 /** 广播订阅 sentinel。 */
 const ANY: '*' = '*'
 
 /** transport 订阅并推送的事件名清单（§4.3）。 */
-export const PUSHED_TOPICS: readonly string[] = [
+export const PUSHED_TOPICS: readonly (keyof Events)[] = [
   'hive/created',
   'hive/renamed',
   'hive/removed',
