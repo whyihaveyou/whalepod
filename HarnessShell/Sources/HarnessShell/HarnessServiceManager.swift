@@ -95,8 +95,11 @@ final class HarnessServiceManager {
             emitOutput("  工作目录: \(cwd)")
         }
 
-        // 每次(重新)启动都清掉旧端口解析，重新等待子进程上报
+        // 每次(重新)启动都清掉旧端口解析与stdout缓冲，重新等待子进程上报。
+        // 关键：outputBuffer 必须一并清空，否则新进程首条输出会与上一进程残留缓冲混合，
+        // parsePort(from: outputBuffer) 会从残留缓冲误解析出旧端口（Bug#1，实测卡 starting）。
         resolvedPort = config.isAutoPort ? nil : config.port
+        outputBuffer = ""
 
         do {
             let pid = try spawnInOwnGroup(

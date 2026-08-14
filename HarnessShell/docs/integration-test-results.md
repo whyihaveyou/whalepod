@@ -52,7 +52,33 @@
 
 ## 逐项明细
 
-### T1 随机端口（--port 0 + 端口解析）
+### T2 单实例 flock
+
+**T2.1 flock 单实例互斥 ✅ 通过（决定性）**
+- 方法：直接运行 `.build/release/HarnessShell`（完整走 main.swift → `SingleInstance.acquire()` → app.run()），先后台启动两个实例，检查 stderr `[singleton]` 日志 + 进程数。
+- 结果：
+  ```
+  实例A: [singleton] 持锁成功(唯一实例)          # 首启持锁 ✅
+  实例B: [singleton] 文件锁被占用，检出已有实例，聚焦后退出   # 二次启动被挡，立即退出 ✅
+  进程数(实例A/B 同源) = 1                        # 符合单实例 ✅
+  ```
+
+**T2 FD_CLOEXEC 防子进程继承 ✅ 通过**
+- 方法：持锁实例 A 运行时，`lsof` 查 singleton.lock 的持有者 + 退出后 B 能否立获锁。
+- 结果：
+  ```
+  持有 singleton.lock fd 的进程: 仅 HarnessShell(65667, fd=3) 一个 ✅
+  源码确认: fcntl(fd, F_SETFD, FD_CLOEXEC) 已设   # 锁 fd 不被子进程(zsh→node)继承 ✅
+  A 退出 → B 立即 [singleton] 持锁成功         # 锁随内核 fd 自动释放，无残留锁 ✅
+  ```
+- **结论**：flock 主锁 + FD_CLOEXEC + NSRunningApplication 兜底聚焦 全部按预期工作。**T2 通过**。
+
+### T3 崩溃退避重启（状态机骨架，端口恢复被 Bug#1 阻塞）
+> 端口恢复（restart→running 的 resolvedPort）被 Bug#1 阻塞（见顶部问题清单）。但状态机自身的「崩溃检出→退避序列→连续崩溃放弃→主动 stop 不重启」**可通过必崩溃命令（`/bin/false`）独立验证**，不依赖 dsh/端口。
+
+（待补：T3.1 退避序列 / T3.3 连续崩溃放弃 / T3.4 主动 stop 不重启）
+
+
 **T1.parsePort 单元测试 ✅ 通过**
 - 方法：独立 `swift` 脚本复刻 `HarnessServiceManager.parsePort`，喂真实 dsh 输出。
 - 结果：
