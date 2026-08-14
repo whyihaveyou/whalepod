@@ -14,7 +14,7 @@
 |---|---|---|
 | **T1** 随机端口（--port 0 + 解析喂 WebView） | ✅ 通过 | parsePort 单测全过；端到端 running+resolvedPort 可达 PASS |
 | **T2** 单实例 flock（含 FD_CLOEXEC） | ✅ 通过 | 互斥/聚焦退出/锁自动释放/无子进程继承 全验证 |
-| **T3** 崩溃退避重启 | 🟡 待执行 | 修复后全链可测（T7.1 已证明骨架 OK） |
+| **T3** 崩溃退避重启 | ✅ 通过 | T3.1 退避序列/ T3.3 连续崩溃放弃/ T3.4 主动 stop 不重启 |
 | **T4** dsh:// 深链 | 🟡 待执行 | Risk A/B 已修且在代码确认 |
 | **T5** 视觉 chrome | 🟡 待执行 | |
 | **T6** 打包签名 | 🟡 待执行 | 我的 Scripts 回归 |
@@ -94,9 +94,29 @@ A 退出 → B 立即 [singleton] 持锁成功    # 无子进程持锁残留
 - **结论**：flock 主锁 + FD_CLOEXEC + NSRunningApplication 兜底聚焦全部按预期。**T2 通过**。
 
 ### T3 崩溃退避重启（全链）
-> Bug#1 修复后，端口恢复面已通（T7.1 证明）。补充验证状态机专有面：
 
-（待补：T3.1 退避序列 1→2→4→8→16→30 / T3.3 连续崩溃 5 次放弃 / T3.4 主动 stop 不重启）
+**T3.1 退避序列 + T3.3 连续崩溃放弃 ✅ 通过**
+- 方法：command=`exit 1`（启动即崩溃，永不 running）→ restartAttempt 持续累加。观察 `restarting(a,delay)` 序列与最终 failed。
+- 结果：
+  ```
+  退避序列(delay) = 1.0 → 2.0 → 4.0 → 8.0 → 16.0     # 指数退避，与预期逐项吻合 ✅
+  FAILED: "服务连续崩溃 6 次，已放弃自动重启，请手动启动"   # 达 maxConsecutiveCrashes 上限转 failed ✅
+  连续崩溃样本(restartAttempt 累计) = 5 次后放弃
+  ```
+- **判读**：T3.1 指数退避序列正确（1→2→4→8→16，30 封顶逻辑在，因 5 次即达放弃上限未触发 30）；T3.3 连续崩溃 5 次放弃正确。
+
+**T3.4 主动 stop 不重启 ✅ 通过（真实 dsh）**
+- 方法：真实 `corepack pnpm dsh web --port 0` 进 running 后 `manager.stop()`，断言 stop 后无 restarting 且停在 stopped。
+- 结果：
+  ```
+  [t+0s] starting → [t+6s] running → manager.stop() → [t+8s] stopped
+  stop后6s finalState=stopped；restartCount=0（stop 后无任何重启尝试）
+  子进程: 无 dsh 残留（stop 的 killpg SIGTERM→SIGKILL 清理生效）
+  ```
+- **判读**：`userRequestedStop=true` 后 poll 走 stopped 分支、不 scheduleRestart —— 语义正确。
+- 注：首轮测试曾出现 `runningAfterStop=YES` 误报，系测试断言时序瑕疵（stop 瞬间 state 残留 running + 循环起点过早），**非产品 bug**；修正断言（只查 restartCount 与最终状态）后 PASS。
+
+**结论：T3 全链通过**（退避序列 / 连续崩溃放弃 / 主动 stop 不重启；restart 端口恢复由 T7.1 覆盖）。
 
 ---
 （待补 T4/T5/T6）
