@@ -9,7 +9,7 @@
  * @module @dfh/honeycomb/runtime/fiber
  */
 
-import { makeId } from '../framework'
+import { makeId } from '../util'
 import type { MemberId } from '../types'
 import type { RuntimeHandle } from './registry'
 

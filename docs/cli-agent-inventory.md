@@ -89,6 +89,9 @@
 - **后端**：DeepSeek（OpenAI 兼容 `api.deepseek.com/v1`）。
 - **实测结论**：✅ `opencode run --format json "reply with exactly OK"` 成功返回，事件序列 `step_start → text → step_finish` 抓取无误。**本机唯一端到端可用 agent，adapter 首选参考实现。** token 统计在 `step_finish.step.tokens` 中（本次为空，长回复时会填充）。
 
+  **⚠️ stdin-EOF 行为（e2e 关键发现，2026-08-14 深夜）**：opencode 用 **piped stdio** 且 stdin **保持开启**时，会**阻塞等待 stdin EOF** 才执行 one-shot 命令（对照：40s/90s/120s 均 0 输出；spawn 后立刻 `child.stdin.end()` 则 **~9s 出完整 NDJSON**）。prompt 走 **argv**（`opencode run "<prompt>"`）而非 stdin，因此连接器对 prompt 经 argv 的 one-shot agent **必须在 spawn 后立刻关闭 stdin**（bridge `deferSpawn` 模式已实现 `child.stdin.end()`）。
+  **`--pure`**：跳过外部 plugin/MCP bootstrap。本机配置了 `sciverse`/`sciverse-survey-gates` MCP（后者无 token），会偶发阻塞；`--pure` 让 one-shot 稳定（实测 ~8-9s 出结果）。adapter 已加 `--pure`（注释记录取舍：host 驱动时不需要 opencode 自带 MCP）。
+
 ---
 
 ## 4. hermes（Hermes Agent）
@@ -158,3 +161,24 @@
 3. **流式解析**：codex / kimi / opencode / claude / gemini 均输出 **NDJSON（JSONL）事件流**，但事件 schema 各不相同，需各写一个 parser。hermes/aider/goose 为纯文本。
 4. **本机网络现状**：codex（ChatGPT 后端）被 403 封锁需代理；kimi ark 端点超时；opencode（DeepSeek）与 hermes（opencode.ai）可用。**adapter 应支持 per-agent 的 HTTP(S) 代理注入，并对超时/封锁做明确错误上报。**
 5. **配置目录**：`~/.codex`、`~/.kimi-code`、`~/.config/opencode`、`~/.hermes`、`~/.claude`、`~/.gemini`、`~/.aider.conf.yml`、`~/.config/goose`、`~/.qwen`。
+6. **铁律（e2e 实测，2026-08-14）**：**prompt 经 argv 的 one-shot agent，spawn 后必须立刻 `stdin.end()`**。实测 opencode 在 piped stdin 保持开启时阻塞等 stdin EOF（>120s 无输出），关 stdin 则 ~9s 出结果。codex/kimi/hermes（同走 argv + deferSpawn）联调时照此办理。
+7. **事件契约标准化路径已验证**：`detect → spawn → send(→argv prompt) → 事件流(receiver)` 全链路在真 opencode 上跑通（见 §7）。
+
+---
+
+## 7. 真机端到端验证结果（Task #01a000f8）
+
+在 `packages/honeycomb` 真机跑通完整连接器链路，测试文件 `test/connector-live.test.ts`（4/4 绿）。
+
+- **detect 四连 HIT**：
+  | Adapter | version | config 命中 |
+  |---|---|---|
+  | opencode | 1.18.16 | `~/.config/opencode` ✓ |
+  | codex | codex-cli 0.146.0 | `~/.codex` ✓ |
+  | kimi-code | 0.34.0 | `~/.kimi-code` ✓ |
+  | hermes | v0.20.0 | `~/.hermes` ✓ |
+  `claude-code` miss（未安装，spawn 时报"not installed + 安装指引"）。
+- **事件流标准化（真 opencode）**：`stream`(chunk="OK") → `done`(exitCode=0)，8.6s 完成。simple prompt 无 tool，故仅 stream+done；tool-call/tool-result 映射由 recorded-protocol + mock-agent 确定性用例覆盖。
+- **env-filter 洗清嫌疑**：filtered env 下 opencode 照常 8.6s 通，慢/挂与白名单无关。
+- **根因修正**：`bridge/stdio-session.ts` — `deferSpawn` 模式 spawn 后 `child.stdin.end()`；`opencode.ts` — `spawnArgs` 加 `--pure`（跳过 MCP bootstrap 偶发阻塞）。
+- **启动耗时基线**：`--pure` 下 opencode `spawn→首个事件 ~8-9s`（LLM 本身 <1s，其余为进程+MCP-free 初始化）。openopde 直跑（full-env, TTY stdio）冷启动 ~11-16s 无 `--pure` 时因 MCP sciverse 拉取可能更久或偶发挂起。

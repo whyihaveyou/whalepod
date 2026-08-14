@@ -125,7 +125,7 @@ export class MemoryWsAdapter implements WsAdapter {
   }
 
   push(conn: WsConn, topic: string, payload: any): void {
-    conn.send({ topic, payload })
+    conn.send({ type: 'event', topic, hiveId: null, payload })
   }
 
   /** 启动事件桥接（在 attach 后调用）。 */

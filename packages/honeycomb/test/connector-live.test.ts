@@ -141,9 +141,9 @@ test('live detection: installed CLIs hit, claude missing', { timeout: 30_000 }, 
 })
 
 // ---------------------------------------------------------------------------
-// 4. Live opencode: detect -> spawn -> events (best-effort, retry + skip)
+// 4. Live opencode: detect -> spawn -> events (best-effort, needs real agent)
 // ---------------------------------------------------------------------------
-test('live opencode: detect→spawn→standardized event stream', { timeout: 200_000 }, async (t) => {
+test('live opencode: detect→spawn→standardized event stream', { timeout: 60_000 }, async (t) => {
   const host = collectHostEnvironment()
   const open = new OpenCodeAdapter()
   const descriptor = await open.detect(host)
@@ -152,43 +152,33 @@ test('live opencode: detect→spawn→standardized event stream', { timeout: 200
     return
   }
 
-  // Race event delivery against a wall clock; opencode startup can hang on a
-  // flaky moment (MCP/bootstrap). Return the collected "OK" stream + exit.
-  const runOnce = async (): Promise<'ok' | 'hang'> => {
-    let session: Awaited<ReturnType<typeof open.spawnSession>> | undefined
-    const hard = new Promise<'hang'>((resolve) => {
-      setTimeout(() => {
-        session?.kill().catch(() => {})
-        resolve('hang')
-      }, 90_000)
-    })
-    const attempt = (async () => {
-      session = await open.spawnSession({ cwd: '/tmp', env: {} })
-      await session.send({ content: 'Reply with exactly the single word: OK' })
-      let sawOK = false
-      for await (const ev of session.events) {
-        if (ev.type === 'stream' && String(ev.chunk).includes('OK')) sawOK = true
-        if (ev.type === 'done') break
-      }
-      return sawOK ? ('ok' as const) : ('hang' as const)
-    })()
-    try {
-      const outcome = await Promise.race([attempt, hard])
-      return outcome
-    } finally {
-      session?.close().catch(() => {})
-      session?.kill().catch(() => {})
+  // Race event delivery against a wall clock. With the stdin-EOF fix the
+  // one-shot run completes in ~8s; a 45s window covers slow moments. (The
+  // deterministic mock-agent + recorded-protocol tests above cover the
+  // bridge and normalizer, so a skip here is a real-agent availability issue,
+  // not a connector defect.)
+  let session: Awaited<ReturnType<typeof open.spawnSession>> | undefined
+  const hard = new Promise<'timeout'>((resolve) => setTimeout(() => { session?.kill().catch(() => {}); resolve('timeout') }, 45_000))
+  const attempt = (async () => {
+    session = await open.spawnSession({ cwd: '/tmp', env: {} })
+    await session.send({ content: 'Reply with exactly the single word: OK' })
+    let sawOK = false
+    for await (const ev of session.events) {
+      if (ev.type === 'stream' && String(ev.chunk).includes('OK')) sawOK = true
+      if (ev.type === 'done') break
     }
-  }
+    return sawOK ? ('ok' as const) : ('no-ok' as const)
+  })()
 
-  // up to 3 attempts; opencode startup flakiness (not connector bug) tolerated
-  let outcome: 'ok' | 'hang' = 'hang'
-  for (let i = 0; i < 3 && outcome !== 'ok'; i++) {
-    outcome = await runOnce()
+  try {
+    const outcome = await Promise.race([attempt, hard])
+    if (outcome === 'timeout') {
+      t.skip('opencode did not emit output within 45s — external agent unresponsive right now; expected since its startup is network/MCP dependent. Deterministic bridge/normalizer coverage is in the tests above.')
+      return
+    }
+    assert.equal(outcome, 'ok', 'opencode should stream "OK" then done through the connector chain')
+  } finally {
+    session?.close().catch(() => {})
+    session?.kill().catch(() => {})
   }
-  if (outcome !== 'ok') {
-    t.skip('opencode did not emit output within the window on 3 attempts — this is ambient agent startup flakiness (its MCP/bootstrap hangs), not a connector defect; deterministic protocol/bridge coverage is in the tests above.')
-    return
-  }
-  assert.equal(outcome, 'ok', 'opencode should stream "OK" then done through the connector chain')
 })

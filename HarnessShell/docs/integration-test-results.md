@@ -35,7 +35,28 @@
 
 ## 逐项明细
 
-### T7 叠加回归（重中之重）
+### T5 视觉 chrome
+**✅ 通过（代码审查逐项对应预案 + 真实 app 启动验证）**
+- 依据：`ShellTokens.swift`（唯一权威源 design/tokens/tokens.css，暗色优先）+ `MainWindowController.updateUI(state:)` 六态分支。
+- **暗色**：`bgApp 0x0D1020`；注释明确"窗口固定 .darkAqua 取 dark 值"；字体 Inter/PingFang + JetBrains Mono 回落。
+- **状态点语义**（4 色，与团队面板全局一致）：
+  ```
+  running → statusActive  0x22D3EE（spark 青）
+  starting/restarting → statusProgress  0x7A4DFF（violet 紫）+ startBreathing() 呼吸
+  stopped → statusIdle  0x6E7692（灰，QA 否决过 textDisabled 2.7:1，改专用灰）
+  failed → statusDanger  0xF87171（red）
+  ```
+- **三态覆盖层**（updateUI 六态 case）：
+  ```
+  starting/restarting → 加载页：品牌图标(darkTile 96) + spinner + "正在启动服务…" + mono 端口
+  stopped            → 未运行页：空心灰点(HollowStatusDot) + "服务未运行" + 启动按钮
+  failed             → 错误页：⚠ + 具体 message + 重试按钮
+  ```
+- **Risk B 集成确认**：`.running` 里 `hasLoadedInitialURL ? reloadIfPortChanged() : loadInitialURLIfNeeded()` —— 正是 Flash-3 的 reload 跟随逻辑，与 T7 闭环。
+- 真实 app 在 T2/T3/T7 过程中多次启动均正常渲染（无崩溃），UI 驱动经 updateUI 清晰映射。
+- **结论：T5 通过**（静态映射审查严格对应 `integration-test.md` T5 判据）。
+
+
 
 **T7.1 kill→崩溃重启后 resolvedPort 正确且可达 ✅ 通过（Bug#1 修复后复测）**
 - 方法：`swiftc` 编真实 `HarnessServiceManager+ServiceConfig+@main`，config=自动端口（corepack pnpm dsh web, port 0）；running 后 `killpg(spawnedPid, SIGKILL)`，等待重启，断言 `resolvedPort` 变化且可达。

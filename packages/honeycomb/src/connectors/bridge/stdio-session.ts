@@ -13,6 +13,12 @@
  *     trailing argv argument — which is how those CLIs actually take the
  *     prompt, rather than reading it from stdin.
  *
+ * **stdin-EOF note (measured on host):** one-shot agents that take the prompt
+ * from argv (e.g. `opencode run "<prompt>"`) block waiting for `stdin` EOF if
+ * a piped stdin is left open — measured: 60s+ with zero stdout, versus ~9s and
+ * a full NDJSON reply once stdin is closed. Deferred spawn therefore calls
+ * `child.stdin.end()` immediately on spawn.
+ *
  * stdout is buffered line-by-line (JSON objects may straddle buffer chunks)
  * and each complete line is handed to the normalizer. stderr is surfaced as
  * `stream` chunks (a later pass may classify per-agent error frames).
@@ -108,6 +114,13 @@ export class StdioSession implements AgentSession {
       this.emit({ type: 'stream', chunk: chunk.toString('utf8') })
     })
 
+    // Deferred one-shot agents deliver their prompt as a trailing argv
+    // argument rather than via stdin. Measured on host: leaving the piped
+    // stdin open makes agents like `opencode run` block waiting for stdin EOF
+    // (no output for 60s+). Close stdin immediately so the process runs its
+    // one-shot command without waiting for a stdin prompt.
+    if (this.opts.deferSpawn) child.stdin.end()
+
     child.on('close', (code) => {
       // Flush any trailing line without a newline.
       if (this.stdoutBuf.trim()) this.emit(this.normalize(this.stdoutBuf))
@@ -161,17 +174,24 @@ export class StdioSession implements AgentSession {
    * Send one turn to the agent.
    *
    * In deferred one-shot mode the first string content is appended as a
-   * trailing argv argument before the process spawns, matching how
-   * `opencode run <prompt>` / `codex exec <prompt>` / `kimi -p <prompt>` /
-   * `hermes -z <prompt>` actually receive their prompt. Subsequent sends (or
-   * non-string content) are written to stdin as newline-terminated JSON
-   * frames per the baseline contract.
+   * trailing argv argument before the process spawns, and stdin is closed
+   * immediately on spawn (see {@link StdioSessionOptions.deferSpawn}) — that
+   * is how `opencode run <prompt>` / `codex exec <prompt>` / `kimi -p
+   * <prompt>` / `hermes -z <prompt>` receive their prompt: via argv, not
+   * stdin. Such one-shot agents consume exactly one leading prompt; a
+   * subsequent send to the already-closed stdin is a no-op.
+   *
+   * Non-deferred (interactive) agents keep stdin open and receive
+   * newline-terminated JSON frames per the baseline contract.
    */
   async send(input: SessionInput): Promise<void> {
-    if (this.opts.deferSpawn && !this.spawned) {
-      const prompt = typeof input.content === 'string' ? input.content : ''
-      if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
-      this.ensureSpawned()
+    if (this.opts.deferSpawn) {
+      if (!this.spawned) {
+        const prompt = typeof input.content === 'string' ? input.content : ''
+        if (prompt) this.opts.args = [...(this.opts.args ?? []), prompt]
+        this.ensureSpawned()
+      }
+      // One-shot agent: stdin is closed at spawn; further sends are no-ops.
       return
     }
     this.ensureSpawned()

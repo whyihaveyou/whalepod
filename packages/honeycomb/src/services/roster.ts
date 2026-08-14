@@ -9,7 +9,7 @@
  */
 
 import type { Context } from '../framework'
-import { makeId, now } from '../framework'
+import { makeId, now } from '../util'
 import type { FactStore } from '../persistence/store'
 import type { MemberRuntime, RuntimeMessage, RuntimeRegistry } from '../runtime/registry'
 import { FiberHost } from '../runtime/fiber'

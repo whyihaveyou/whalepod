@@ -9,7 +9,7 @@
  * @module @dfh/honeycomb/persistence/store
  */
 
-import { now } from '../framework'
+import { now } from '../util'
 import type { Hive, HiveId, Member, MemberId, Message, MessageId, Task, TaskId } from '../types'
 import type { FactRecord, HiveFact } from './facts'
 

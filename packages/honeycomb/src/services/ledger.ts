@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../framework'
-import { makeId, now } from '../framework'
+import { makeId, now } from '../util'
 import type { FactStore } from '../persistence/store'
 import type { CreateTaskInput, HiveId, MemberId, Task, TaskFilter, TaskId, TaskPatch } from '../types'
 

@@ -86,6 +86,15 @@ export interface LocalHatchMemberInput {
   cwd?: string
 }
 
+/** `POST /v1/hives/{hiveId}/members`（RegisterMemberInput — 仅注册不孵化） */
+export interface LocalRegisterMemberInput {
+  name: string
+  role?: LocalMemberRole
+  backend: string
+  connectorId?: string | null
+  model?: string
+}
+
 // ---------- Task（LedgerService DTO） ----------
 export type LocalTaskStatus = 'backlog' | 'in-progress' | 'completed' | 'cancelled' | 'blocked'
 
@@ -164,6 +173,12 @@ export interface LocalActivityPage {
   items: LocalActivityItem[]
   nextCursor?: { ts: number; id: string }
   hasMore: boolean
+}
+
+/** feed 分页游标（message.feed 的 cursor 参数） */
+export interface LocalFeedCursor {
+  ts: number
+  id?: string
 }
 
 // ---------- Mandate（§3.5） ----------

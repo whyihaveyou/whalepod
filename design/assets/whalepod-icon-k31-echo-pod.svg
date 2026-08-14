@@ -37,8 +37,8 @@
 
   <!-- 被声波"照见"的同伴：阶梯纵深、距离越远越淡，颜色与对应弧一致 -->
   <use href="#podWhaleK1" transform="translate(694,552) rotate(-8) scale(1.5)" fill="#22D3EE" opacity="0.8"/>
-  <use href="#podWhaleK1" transform="translate(800,652) rotate(-8) scale(1.15)" fill="#22D3EE" opacity="0.5"/>
-  <use href="#podWhaleK1" transform="translate(822,724) rotate(-8) scale(0.9)" fill="#7A4DFF" opacity="0.55"/>
+  <use href="#podWhaleK1" transform="translate(800,652) rotate(-8) scale(1.15)" fill="#22D3EE" opacity="0.58"/>
+  <use href="#podWhaleK1" transform="translate(822,724) rotate(-8) scale(0.9)" fill="#7A4DFF" opacity="0.65"/>
 
   <!-- 领鲸（与概念 A 同位同大） -->
   <use href="#podWhaleK1" transform="translate(238,392) rotate(-8) scale(4.4)" fill="url(#whaleK1)"/>

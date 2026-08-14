@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../framework'
-import { makeId, now } from '../framework'
+import { makeId, now } from '../util'
 import { CourierOutgoing, type CourierOutgoingPayload } from '../events'
 import type { FactStore } from '../persistence/store'
 import type {

@@ -48,11 +48,17 @@ async function main(): Promise<void> {
     // ---- 2. WS: subscribe (await ack) + trigger event + receive push -------
     const ws = new WebSocket(wsUrl)
     await onceOpen(ws)
-    ws.on('message', (d) => console.log('DBG recv:', d.toString()))
 
     ws.send(JSON.stringify({ type: 'subscribe', hiveId }))
     // 等待订阅 ack，确保服务端已生效（消除「订阅 vs 事件」竞态）。
     await waitForFrame(ws, (m) => m.type === 'subscribed' && m.hiveId === hiveId)
+
+    // 先挂上 task/created 的等待（订阅在先、触发在后的正确模式），再触发事件，
+    // 避免「事件已推送但在等待监听挂载前到达」的竞态。
+    const taskFramePromise = waitForFrame(
+      ws,
+      (m) => m.type === 'event' && m.topic === 'task/created',
+    )
 
     // 触发事件：给 hive 建一个 task（内部 emit task/created）。
     const taskRes = await fetch(`${baseUrl}/v1/hives/${hiveId}/tasks`, {
@@ -62,7 +68,7 @@ async function main(): Promise<void> {
     })
     assert.equal(taskRes.status, 200)
 
-    const frame = await waitForFrame(ws, (m) => m.type === 'event' && m.topic === 'task/created')
+    const frame = await taskFramePromise
     assert.equal(frame.hiveId, hiveId)
     assert.equal(frame.topic, 'task/created')
     assert.equal((frame.payload as any).task.hiveId, hiveId)

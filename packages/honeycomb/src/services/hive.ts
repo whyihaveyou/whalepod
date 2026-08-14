@@ -8,7 +8,7 @@
  */
 
 import type { Context } from '../framework'
-import { makeId, now } from '../framework'
+import { makeId, now } from '../util'
 import type { ResolvedHoneycombConfig } from '../config'
 import type { FactStore } from '../persistence/store'
 import type { CreateHiveInput, HatchMemberInput, Hive, HiveId, HiveWorkspaceMode } from '../types'
