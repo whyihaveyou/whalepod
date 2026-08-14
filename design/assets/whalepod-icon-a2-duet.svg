@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 鲸群 WhalePod · A2-③：双鲸对鸣（自选第三路）
+       两头鲸相对而游，声波弧在中间交汇 = 对等通信（teammate ↔ lead 双向） -->
+  <defs>
+    <radialGradient id="seaF" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#14203A"/>
+      <stop offset="1" stop-color="#0A0F1C"/>
+    </radialGradient>
+    <linearGradient id="whaleF" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <g id="whaleF2">
+      <path d="M 16 56
+               C 14 46 22 36 38 30
+               C 58 22 82 26 92 40
+               C 98 48 96 58 86 64
+               C 68 76 40 76 26 68
+               C 20 64 16 60 16 56 Z"/>
+      <path d="M 18 48 C 8 44 2 34 6 24 C 11 31 16 33 21 33
+               C 19 26 22 19 29 17 C 29 26 31 33 36 38 C 30 43 23 47 18 48 Z"/>
+    </g>
+  </defs>
+
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#seaF)"/>
+
+  <!-- 交汇声波：两组弧在中央相遇 -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 420 420 A 92 92 0 0 1 480 512" stroke="#22D3EE" stroke-width="22" opacity="0.9"/>
+    <path d="M 452 380 A 156 156 0 0 1 546 512" stroke="#22D3EE" stroke-width="17" opacity="0.5"/>
+    <path d="M 604 420 A 92 92 0 0 0 544 512" stroke="#7A4DFF" stroke-width="22" opacity="0.85"/>
+    <path d="M 572 380 A 156 156 0 0 0 478 512" stroke="#7A4DFF" stroke-width="17" opacity="0.45"/>
+  </g>
+
+  <!-- 左鲸（主，朝右） -->
+  <use href="#whaleF2" transform="translate(180,452) rotate(-6) scale(3.9)" fill="url(#whaleF)"/>
+  <!-- 右鲸（镜像朝左，稍小，紫色 = 对等伙伴） -->
+  <use href="#whaleF2" transform="translate(844,452) rotate(6) scale(-3.2,3.2)" fill="#7A4DFF" opacity="0.8"/>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 鲸群 WhalePod · A2-①：声呐唤群
+       领鲸声波弧"照亮"远方同伴剪影 = 回声定位发现同伴（roster/discoverAll 隐喻） -->
+  <defs>
+    <radialGradient id="seaD" cx="0.45" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#14203A"/>
+      <stop offset="1" stop-color="#0A0F1C"/>
+    </radialGradient>
+    <linearGradient id="whaleD" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <g id="whaleD2">
+      <path d="M 16 56
+               C 14 46 22 36 38 30
+               C 58 22 82 26 92 40
+               C 98 48 96 58 86 64
+               C 68 76 40 76 26 68
+               C 20 64 16 60 16 56 Z"/>
+      <path d="M 18 48 C 8 44 2 34 6 24 C 11 31 16 33 21 33
+               C 19 26 22 19 29 17 C 29 26 31 33 36 38 C 30 43 23 47 18 48 Z"/>
+    </g>
+  </defs>
+
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#seaD)"/>
+
+  <!-- 声波弧：从领鲸鲸首向右上扩散 -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 648 400 A 118 118 0 0 1 716 512" stroke="#22D3EE" stroke-width="26" opacity="0.9"/>
+    <path d="M 694 352 A 194 194 0 0 1 788 512" stroke="#22D3EE" stroke-width="22" opacity="0.55"/>
+    <path d="M 738 306 A 268 268 0 0 1 858 512" stroke="#7A4DFF" stroke-width="18" opacity="0.38"/>
+  </g>
+
+  <!-- 被声波"照亮"的同伴：栖在弧线上方安全区内，不压弧、不贴角 -->
+  <use href="#whaleD2" transform="translate(636,238) rotate(-8) scale(1.5)" fill="#22D3EE" opacity="0.6"/>
+  <use href="#whaleD2" transform="translate(752,164) rotate(-8) scale(1.05)" fill="#7A4DFF" opacity="0.5"/>
+
+  <!-- 领鲸 -->
+  <use href="#whaleD2" transform="translate(228,420) rotate(-8) scale(4.5)" fill="url(#whaleD)"/>
+</svg>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 鲸群 WhalePod · K31-2「群游成列」（平行探索：视觉-K3-1）
+       叙事：领鲸发声领航，两头同伴以纵深梯队尾随同游——
+       队列 = 一个团队在行进，声波弧 = 领鲸的调度/通信。
+       同伴用同形剪影递减弱化（近 0.55 / 远 0.35），最远一头带紫调呼应第三道弧。
+       色板：深海暗底 + #22D3EE + #7A4DFF（零新增 token） -->
+  <defs>
+    <radialGradient id="seaK2" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#14203A"/>
+      <stop offset="1" stop-color="#0A0F1C"/>
+    </radialGradient>
+    <linearGradient id="whaleK2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <g id="podWhaleK2">
+      <path d="M 16 56
+               C 14 46 22 36 38 30
+               C 58 22 82 26 92 40
+               C 98 48 96 58 86 64
+               C 68 76 40 76 26 68
+               C 20 64 16 60 16 56 Z"/>
+      <path d="M 18 48 C 8 44 2 34 6 24 C 11 31 16 33 21 33
+               C 19 26 22 19 29 17 C 29 26 31 33 36 38 C 30 43 23 47 18 48 Z"/>
+    </g>
+  </defs>
+
+  <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#seaK2)"/>
+
+  <!-- 尾随梯队：领鲸左下方的对角纵深，先画远的（压叠出层次） -->
+  <use href="#podWhaleK2" transform="translate(125,745) rotate(-8) scale(1.6)" fill="#7A4DFF" opacity="0.35"/>
+  <use href="#podWhaleK2" transform="translate(185,655) rotate(-8) scale(2.2)" fill="#22D3EE" opacity="0.55"/>
+
+  <!-- 领鲸声波弧（与概念 A 同位） -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 668 396 A 120 120 0 0 1 736 512" stroke="#22D3EE" stroke-width="26" opacity="0.9"/>
+    <path d="M 716 348 A 196 196 0 0 1 812 512" stroke="#22D3EE" stroke-width="22" opacity="0.55"/>
+    <path d="M 762 302 A 272 272 0 0 1 886 512" stroke="#7A4DFF" stroke-width="18" opacity="0.38"/>
+  </g>
+
+  <!-- 领鲸（与概念 A 同位同大） -->
+  <use href="#podWhaleK2" transform="translate(238,392) rotate(-8) scale(4.4)" fill="url(#whaleK2)"/>
+</svg>
