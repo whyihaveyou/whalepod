@@ -131,7 +131,7 @@ function boot(opts: { idleTimeoutMs?: number } = {}): Fixture {
   const loop = createOrchestrationLoop(deps)
   loop.onEvent((e) => events.push(e))
   loop.start(['h1'])
-  return { ctx, roster, ledger, loop, events, applyCalls, sweep: () => sweep ?? (() => {}), clock }
+  return { ctx, roster, ledger, loop, events, applyCalls, sweep: () => sweep?.(), clock }
 }
 
 /** 注册一个 worker；`online=true` 使其 sendTo 成功。 */

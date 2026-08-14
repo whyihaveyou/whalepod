@@ -85,11 +85,12 @@ export type WsClientMessage =
   | { type: 'unsubscribe'; hiveId: HiveId }
   | { type: 'hello'; client?: string; version?: number }
 
-/** WS 推送视图（transport 只发）。 */
-export interface WsMessage {
-  topic: string
-  payload: any
-}
+/** WS 服务端 → 客户端帧（§4.2）。transport 只发；由 WsConn.send 转发。 */
+export type WsMessage =
+  | { type: 'event'; topic: string; hiveId: HiveId | null; payload: any }
+  | { type: 'subscribed'; hiveId: HiveId }
+  | { type: 'unsubscribed'; hiveId: HiveId }
+  | { type: 'hello'; ok: boolean }
 
 /** WS 客户端连接视图（transport 驱动订阅与推送）。 */
 export interface WsConn {
