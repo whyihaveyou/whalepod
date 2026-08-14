@@ -35,6 +35,7 @@ export interface Agent {
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
 export interface TaskEvent {
+  id: string; // 真实事件都带 id（transport DTO task-updated 的 task.id 快照）
   ts: number;
   actor: string; // display name
   action: string; // "创建并指派给 视觉-K3-1" / "标记为 in_progress" ...

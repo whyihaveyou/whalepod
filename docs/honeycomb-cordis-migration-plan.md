@@ -12,6 +12,20 @@
 
 ## 0. 现状速览（迁移前已核实）
 
+> ✅ **进度（2026-08-14）**
+> - 小步① 依赖已装（peer deps + node_modules 实装），registry.ts module-not-found 清零。
+> - **A0（util.ts 抽出 makeId/now）已完成**：`src/util.ts` 新建，`roster/ledger/courier/hive`(services, makeId+now)、
+>   `persistence/store.ts`(now)、`runtime/fiber.ts`(makeId) 的 import 已切 `../util`；基线 typecheck 0 error。
+> - 剩余迁移为**原子切换**：services Service-化 / plugin.ts / events+context 增强目标 / runtime import 都相互耦合，
+>   且 `plugin.ts`、`config.ts`、`transport/*` 正被 #01a00107（transport 真适配器）占用，
+>   `consumer/orchestration-loop.ts` 正被 #01a0012a（编排健壮性）占用 → 待这些并发任务交回后按 Phase B 落地。
+
+从 `docs/harness-plugin-integration.md §6-8` 的迁移清单互补——这里是按文件粒度展开的 step-by-step。
+
+---
+
+## 0. 现状速览（迁移前已核实）
+
 - `src/framework.ts` = **自造 Context shim**（Proxy）；`src/context.ts` 做服务声明合并增强。
   方法集合：`provide/get/inject`、`on/once/off/emit/parallel/serial/bail/waterfall`、
   `effect/onDispose/scope/dispose/root`。
