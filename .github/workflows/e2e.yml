@@ -1,0 +1,93 @@
+name: e2e
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 取消同 PR 上一次未完成的运行
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-regression:
+    name: Playwright 视觉回归（chromium）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install team-panel deps
+        working-directory: prototypes/team-panel
+        run: pnpm install --frozen-lockfile --no-audit --no-fund
+
+      - name: Install e2e deps
+        working-directory: e2e
+        run: pnpm install --frozen-lockfile --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Start team-panel dev server
+        working-directory: prototypes/team-panel
+        run: |
+          # 后台起 vite dev server；等待 5173 可达
+          nohup pnpm dev --host 127.0.0.1 --port 5173 > /tmp/vite-dev.log 2>&1 &
+          VITE_PID=$!
+          echo "vite pid=$VITE_PID"
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:5173 > /dev/null 2>&1; then
+              echo "✅ vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://127.0.0.1:5173 > /dev/null 2>&1; then
+            echo "❌ vite 60s 内未就绪"
+            cat /tmp/vite-dev.log
+            exit 1
+          fi
+
+      - name: Run Playwright visual regression
+        working-directory: e2e
+        env:
+          CI: 'true'
+        run: pnpm test
+
+      - name: Upload HTML report (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Upload diff screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diff-screenshots
+          path: e2e/test-results/
+          retention-days: 7
+
+      - name: Kill vite dev server
+        if: always()
+        run: |
+          pkill -f "vite" 2>/dev/null || true
+          pkill -f "node.*vite" 2>/dev/null || true
