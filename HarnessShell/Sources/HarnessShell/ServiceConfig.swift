@@ -23,7 +23,10 @@ import Foundation
 ///     壳从子进程 stdout 解析实际端口后再让 WKWebView 指向它——彻底避免端口冲突。
 ///   - 正整数：固定端口。壳追加 `--port <n>` 并探测该端口；若已被外部占用则直接复用。
 struct ServiceConfig: Codable {
-    /// 启动 harness 服务的 shell 命令（会通过 `zsh -lc` 执行，以加载 PATH 等环境）。
+    /// 启动 harness 服务的命令。
+    /// - 非空：作为 custom 命令，通过 `zsh -lc` 原样执行（向后兼容旧配置，如 `npm exec ...`）。
+    /// - 空/默认（推荐）：走自动探测链（RuntimeBootstrap）——bundled node → 本机 node → npx 兜底，
+    ///   即「免装 Node 一键起」。
     /// 注意：命令中不要再写 `--port`，壳会自动追加。
     var command: String
     /// 启动命令的工作目录；为空则使用用户主目录。

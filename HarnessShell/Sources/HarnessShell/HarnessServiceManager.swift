@@ -89,8 +89,22 @@ final class HarnessServiceManager {
         guard spawnedPid == nil else { return } // 已在启动流程中
 
         state = .starting
-        let commandLine = buildCommandLine()
-        emitOutput("▶ 启动命令: \(commandLine)")
+
+        // OOBE-M0：由 RuntimeBootstrap 解析启动方案——
+        //   bundled / nodeProbe → 直接 exec node（[nodePath, bin.js, web, ...args]）
+        //   custom / npxFallback → 走 zsh -lc shell（向后兼容现有命令路径）
+        let portArg = config.isAutoPort ? "--port 0" : "--port \(config.port)"
+        let plan = RuntimeBootstrap.resolve(config: config, portArg: portArg)
+        switch plan {
+        case .direct(let executable, let arguments):
+            emitOutput("▶ 启动 node: \(executable) \(arguments.joined(separator: " "))")
+        case .shell(let command):
+            emitOutput("▶ 启动命令: \(command)")
+        case .unavailable(let reason):
+            emitOutput(reason)
+            state = .failed(reason)
+            return
+        }
         if let cwd = config.workingDirectory, !cwd.isEmpty {
             emitOutput("  工作目录: \(cwd)")
         }
@@ -102,38 +116,29 @@ final class HarnessServiceManager {
         outputBuffer = ""
 
         do {
-            let pid = try spawnInOwnGroup(
-                arguments: ["zsh", "-lc", commandLine],
-                workingDirectory: config.workingDirectory,
-                environment: mergedEnvironment()
-            )
+            let pid: pid_t
+            switch plan {
+            case .direct(let executable, let arguments):
+                pid = try spawnInOwnGroup(
+                    requestedExecutable: executable,
+                    arguments: arguments,
+                    workingDirectory: config.workingDirectory,
+                    environment: mergedEnvironment()
+                )
+            case .shell(let command):
+                pid = try spawnInOwnGroup(
+                    arguments: ["zsh", "-lc", command],
+                    workingDirectory: config.workingDirectory,
+                    environment: mergedEnvironment()
+                )
+            case .unavailable:
+                return
+            }
             spawnedPid = pid
             startPolling()
         } catch {
             state = .failed("启动失败: \(error.localizedDescription)")
         }
-    }
-
-    /// 组装实际执行命令：自动端口追加 `--port 0`；固定端口追加 `--port <n>`。
-    ///
-    /// 关键：当命令基于 `npm exec`/`npx` 时，`--port` 会被 npm/npx 当作**它自己的**参数
-    /// 吞掉（实测报 `error: too many arguments`）。必须用 `--` 分隔符，让 npm 把其后
-    /// 的参数透传给被测的 `dsh` 可执行文件。`npx --yes` 则无需 `--` 也能透传，这里统一
-    /// 对 npm/ npx 类命令都加 `--`，对直接命令（如裸的 `dsh web`）直接追加即可。
-    private func buildCommandLine() -> String {
-        let command = config.command
-        let portArg: String
-        if config.isAutoPort {
-            portArg = "--port 0"
-        } else {
-            portArg = "--port \(config.port)"
-        }
-        // npm/npx exec 场景需要 `--` 分隔符透传参数
-        let needsSeparator = command.starts(with: "npm ") || command.starts(with: "npx ")
-        if needsSeparator {
-            return command + " -- " + portArg
-        }
-        return command + " " + portArg
     }
 
     /// 停止服务：向进程组发 SIGTERM，宽限期后 SIGKILL；端口由外部占用时不处理（不归我们管）。
@@ -272,10 +277,27 @@ final class HarnessServiceManager {
     // MARK: - posix_spawn（独立进程组 + 输出管道）
 
     /// 在独立进程组中启动命令，stdout/stderr 重定向到管道异步读取。
-    private func spawnInOwnGroup(arguments: [String], workingDirectory: String?, environment: [String: String]) throws -> pid_t {
-        guard let executablePath = findExecutable("zsh") else {
-            throw NSError(domain: "HarnessService", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "找不到 zsh"])
+    /// - `requestedExecutable`：可选，指定可执行文件路径（OOBE-M0 bundled/nodeProbe 直接 exec node，
+    ///   不走 zsh 包裹）。默认 nil = 按名查找 zsh（向后兼容现有 shell 路径）。
+    private func spawnInOwnGroup(requestedExecutable: String? = nil,
+                                 arguments: [String],
+                                 workingDirectory: String?,
+                                 environment: [String: String]) throws -> pid_t {
+        let executablePath: String
+        if let req = requestedExecutable {
+            if req.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: req) {
+                executablePath = req
+            } else if let found = findExecutable(req) {
+                executablePath = found
+            } else {
+                executablePath = req   // 绝对路径兜底，交给 posix_spawn 直接尝试
+            }
+        } else {
+            guard let zsh = findExecutable("zsh") else {
+                throw NSError(domain: "HarnessService", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "找不到 zsh"])
+            }
+            executablePath = zsh
         }
 
         var fileActions: posix_spawn_file_actions_t?
