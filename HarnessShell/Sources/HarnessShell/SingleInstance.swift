@@ -66,15 +66,11 @@ enum SingleInstance {
         return nil
     }
 
-    /// 锁文件路径：`~/Library/Application Support/<bundle-id>/singleton.lock`
-    /// `swift run` 未打包时 Bundle id 为 nil，回落固定目录名，保证与打包应用同锁。
+    /// 锁文件路径：统一归位到数据根 `~/Library/Application Support/WhalePod/singleton.lock`
+    /// （OOBE-M2：数据放置从 bundle-id 目录迁移到产品数据根 WhalePod）。
+    /// `swift run` 未打包与打包应用共用同一把锁，保证只启一个实例。
     private static func lockFileURL() -> URL {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let dirName = Bundle.main.bundleIdentifier ?? "com.aion2dsh.HarnessShell"
-        return home
-            .appendingPathComponent("Library/Application Support", isDirectory: true)
-            .appendingPathComponent(dirName, isDirectory: true)
-            .appendingPathComponent("singleton.lock")
+        DataRoot.lockURL
     }
 
     // MARK: - 聚焦

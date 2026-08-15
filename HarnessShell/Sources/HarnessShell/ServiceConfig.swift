@@ -68,12 +68,19 @@ struct ServiceConfig: Codable {
         return config
     }
 
-    /// 配置文件路径：`~/.harness-shell/config.json`
+    /// 配置文件路径：优先新根 `~/Library/Application Support/WhalePod/config.json`，
+    /// 不存在时回落到旧路径 `~/.harness-shell/config.json`（兼容尚未迁移 / 迁移失败的场景）。
+    /// 迁移逻辑见 Migration.swift。
     private static func configFileURL() -> URL? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        return home
-            .appendingPathComponent(".harness-shell")
-            .appendingPathComponent("config.json")
+        let fm = FileManager.default
+        if fm.fileExists(atPath: DataRoot.configURL.path) {
+            return DataRoot.configURL
+        }
+        // 新根没有时才看旧路径（旧路径有则待迁移；没有则返回新根 URL 表示首启初始化）
+        if fm.fileExists(atPath: DataRoot.legacyConfigURL.path) {
+            return DataRoot.legacyConfigURL
+        }
+        return DataRoot.configURL
     }
 
     /// 配置文件格式：所有字段可选，便于部分覆盖默认值。

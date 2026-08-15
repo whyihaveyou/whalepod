@@ -8,6 +8,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingDeepLink: DeepLink?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 首启数据放置迁移（拿到单例锁之后、读配置之前）：旧 ~/.harness-shell/ → WhalePod
+        Migration.runFirstLaunchMigrationIfNeeded()
+        // 确保 DSH_HOME（harness 数据根）目录存在
+        try? FileManager.default.createDirectory(at: DataRoot.harnessHomeURL,
+                                                 withIntermediateDirectories: true)
+
         buildMainMenu()
         let controller = MainWindowController()
         windowController = controller

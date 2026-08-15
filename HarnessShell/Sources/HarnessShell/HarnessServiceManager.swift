@@ -430,9 +430,14 @@ final class HarnessServiceManager {
     // MARK: - 工具
 
     /// 合并环境变量：继承当前进程环境 + 配置的环境变量 + 补齐常见 PATH。
+    /// OOBE-M2：注入 DSH_HOME 指向 WhalePod/harness（harness 数据根），config.environment 可覆盖。
     private func mergedEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         for (k, v) in config.environment { env[k] = v }
+        // DSH_HOME：默认注入新数据根；若用户在配置里显式指定则不覆盖
+        if env["DSH_HOME"] == nil, !config.environment.keys.contains("DSH_HOME") {
+            env["DSH_HOME"] = DataRoot.harnessHomeURL.path
+        }
         if let path = env["PATH"], !path.contains("/opt/homebrew/bin") {
             env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + path
         } else if env["PATH"] == nil {
