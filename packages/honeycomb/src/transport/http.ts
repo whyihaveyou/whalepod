@@ -92,25 +92,18 @@ export class NodeHttpAdapter {
         body: body ? safeJson(body) : undefined,
       }
 
-      // [DEBUG] transport request tracing
-      const __t0 = Date.now()
-      process.stderr.write(`[http] >> ${httpReq.method} ${httpReq.path} q=${JSON.stringify(httpReq.query)}\n`)
       const httpRes = await this.transport.dispatch(httpReq)
-      process.stderr.write(`[http] << ${httpReq.method} ${httpReq.path} -> ${httpRes.status} in ${Date.now() - __t0}ms\n`)
       let payload: string
       try {
         payload = JSON.stringify(httpRes.body)
       } catch (e) {
-        process.stderr.write(`[http] !! stringify FAILED for ${httpReq.path}: ${String(e)}\n`)
         payload = JSON.stringify({ ok: false, error: { code: 'INTERNAL', message: `stringify: ${String(e)}` } })
       }
-      process.stderr.write(`[http] !! ${httpReq.method} ${httpReq.path} body-len=${payload.length} head=${payload.slice(0, 120)}\n`)
       res.writeHead(httpRes.status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Length': Buffer.byteLength(payload),
       })
       res.end(payload)
-      process.stderr.write(`[http] !! ${httpReq.method} ${httpReq.path} end() called\n`)
     } catch (error) {
       const payload = JSON.stringify({ ok: false, error: { code: 'INTERNAL', message: String(error) } })
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })

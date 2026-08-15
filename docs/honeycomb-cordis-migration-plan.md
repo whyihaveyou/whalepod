@@ -10,6 +10,56 @@
 
 ---
 
+## ⏱ 迁移记录（2026-08-15 凌晨 · 编排-Pro 执行，供 DoD 核对）
+
+### 已完成（按执行序列）
+
+| 项 | 文件 | 动作 |
+|---|---|---|
+| ✓ | `src/util.ts` | **新增**：从 framework.ts 摘出 `makeId` / `now`，5 个 service + persistence/store + runtime/fiber 改指 |
+| ✓ | `tsconfig.json` | connectors 取消 exclude + `allowImportingTsExtensions` |
+| ✓ | `src/events.ts` | `declare module '@deepseek-ai/cordis'`（Events/HiveEventMap 保留） |
+| ✓ | `src/context.ts` | `declare module '@deepseek-ai/cordis'`（services 声明合并） |
+| ✓ | `src/services/{roster,hive,ledger,courier,mandate}.ts` | **Service 子类化**：显式 `constructor(ctx){ super(ctx,'name') }`；`onDispose`→`ctx.effect(() => () => cleanup)`；公开 API 不变 |
+| ✓ | `src/runtime/{registry,native-runtime,agent-runtime,fiber}.ts` | import 切真 cordis；`ctx.agents` 判空保留 |
+| ✓ | `src/plugin.ts` | **真实 `apply(ctx, config)`**：inject `['agents','sessionPersistence']`；Service 注册取代 `ctx.provide` |
+| ✓ | `src/transport/*`（core/port/ws/memory/subscribe/types/server/http） | framework import → cordis；`PUSHED_TOPICS` 改 `readonly (keyof Events)[]`；`ctx.waterfall` 改 next 终止式 |
+| ✓ | `src/index.ts` | 重新导出真实 cordis `Context`/`Service`（作为测试接缝）+ 显式再导出 |
+| ✓ | 测试改造 | 仅 `ctx.dispose()`→`ctx.fiber.dispose()` 之类的框架调用修正；测试逻辑未改 |
+
+### 踩坑（实测）
+
+1. **真 cordis 无 `ctx.onDispose()`** → 统一 `ctx.effect(() => () => void cleanup(), label)`；
+   裸 `setInterval` + return disposer 是坑（timer 不随 dispose 停）。
+2. **真 cordis 无 `ctx.dispose()`** → 测试里改 `ctx.fiber.dispose()`。
+3. **Service 不写 `super(ctx,'name')` = 不注册**（contructor 必须显式）。
+4. **`ctx.waterfall` 签名不同**：shim `(name, acc, payload)` → cordis `(name, input, payload, next)`，
+   courier 用 `(m)=>m`、mandate 用 `(g)=>g` 作 next。
+5. **`PUSHED_TOPICS` 必须 `readonly (keyof Events)[]`**，否则 types.ts 报索引错。
+6. **不要在 transport 层再调 `ctx.provide`**（Service 子类已注册，重复注册报错）。
+7. **`new Context()` 是测试接缝**：`src/index.ts` 重新导出 cordis Context 后，既有测试 `new Context()` 零修改。
+8. **typecheck 绿 ≠ 运行时绿**：boot 路径 "reading 'provide'" 只有真 cordis scope 才暴露，tsc 掩盖——以
+
+### 尚未完成（按定序序列等待）
+
+- `consumer/orchestration-loop.ts`：仍 `import type { Context } from '../framework'`（架构-Pro-2 看门狗在飞）。
+- `src/framework.ts`：**保留过渡**（选项 C 定序：等【释放确认 #2】consumer/ 冻结后，原子合并 = consumer import 切换 + 删 framework.ts + 全量回归）。
+- transport-client.test.ts 测试 7（HIGH-1/MED-5）存在**测试侧竞态 flake**（详见下）→ 待架构-Pro-1 加固。
+
+### 附录：transport-client.test.ts 测试 7 flake 证据（2026-08-15）
+
+- 现象：`WS: 重连补订等 ack 后才置就绪（HIGH-1/MED-5）` 非确定性失败（实测负载高时 2/5、空闲 0/20、常态 1/10），
+  断言 `assert.equal(c.connected, false, '补订 ack 未到不应视为就绪')` actual=true。
+- 机制：测试在 `ws0.forceClose()` 后用 5ms 轮询 `instances.length>=2` 拿到 ws1 再设 `ws1.ackDelayMs = 60`；
+  客户端重连定时器 20ms，fake socket `open()` 为 0ms、内存 transport ack 全同步 → open+ack+ready 可在两次轮询之间
+  全部落盘（libuv 定时器亚毫秒相位分裂，真实 cordis 异步生命周期 + 持久化 fs I/O 放大噪声）→ ackDelayMs=60 设置太迟 → 失败。
+- 排除迁移回归：`git diff 26c782e -- src/transport/` 仅 import 级改动；`client.ts` 工作树干净（git-clean）；
+  迁移前 shim 同步生命周期掩盖了该竞态。
+- 建议修复（测试侧，属架构-Pro-1 范围）：FakeWebSocketFactory 支持「创建即预置 ackDelayMs」（构造时消费，不依赖轮询时序）；
+  或把即时断言改为 waitFor 容忍式。
+
+---
+
 ## 0. 现状速览（迁移前已核实）
 
 > ✅ **进度（2026-08-14）**
