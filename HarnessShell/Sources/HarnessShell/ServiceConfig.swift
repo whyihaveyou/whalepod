@@ -47,9 +47,10 @@ struct ServiceConfig: Codable {
         return URL(string: "http://\(host):\(p)")
     }
 
-    /// 内置默认值：自动端口。
+    /// 内置默认值：command 空（→ 自动探测链 RuntimeBootstrap）+ 自动端口。
+    /// 注意：非空 custom 仅用于自定义数据源；全新安装必须走自动链（OOBE-Slim/Full 分档依赖于此）。
     static let `default` = ServiceConfig(
-        command: "npm exec @deepseek-ai/dsh web",
+        command: "",
         workingDirectory: nil,
         host: "127.0.0.1",
         port: 0,

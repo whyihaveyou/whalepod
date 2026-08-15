@@ -56,7 +56,7 @@ swift run            # 或 swift build 后运行 .build/debug/HarnessShell
 
 ## 配置（可选）
 
-默认启动命令：`npm exec @deepseek-ai/dsh web`（通过 `zsh -lc` 执行，自动继承 PATH）。
+默认 `command` 为空：走自动探测链（RuntimeBootstrap）——Full 档命中 bundled 运行时（免装 Node），Slim 档命中本机 node / `npx @deepseek-ai/dsh` 兜底。`command` 非空时作为 custom 命令通过 `zsh -lc` 原样执行（自动继承 PATH，向后兼容旧配置）。
 
 `port` 语义：**`0`=自动随机端口（默认）**；**正整数**=固定端口。
 
