@@ -62,8 +62,39 @@ jobs:
         working-directory: HarnessShell
         run: swift build -c release
 
+      # ====================================================================
+      # 版本元数据提取：从 inputs.tag（如 v0.1.0-alpha.5）剥 v 前缀得 VERSION，
+      #   正则抽出 alpha 后整数得 BUILD_NUMBER，统一塞 GITHUB_ENV 给后续 step 用。
+      # 规则：v0.1.0-alpha.N → BUILD_NUMBER=N（严格单调；Sparkle 主排序键）
+      # TODO: 切正线（0.2.x）时改用全局 build 计数器（cron chain 维护 .build-counter 文件）
+      # ====================================================================
+      - name: Extract VERSION + BUILD_NUMBER + filenames from tag
+        id: version-meta
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          BUILD_NUMBER="$(echo "${VERSION}" | sed -nE 's/.*-alpha\.([0-9]+)$/\1/p')"
+          # 兜底：非 alpha.N 标签默认 build 号 = 1（待正线切全局计数器后改）
+          [ -n "$BUILD_NUMBER" ] || BUILD_NUMBER=1
+          FULL_DMG="WhalePod-${VERSION}-macos-arm64.dmg"
+          SLIM_ZIP="WhalePod-${VERSION}-macos-arm64-slim.zip"
+          FULL_ZIP="WhalePod-${VERSION}-macos-arm64.zip"
+          {
+            echo "VERSION=$VERSION"
+            echo "BUILD_NUMBER=$BUILD_NUMBER"
+            echo "FULL_DMG=$FULL_DMG"
+            echo "SLIM_ZIP=$SLIM_ZIP"
+            echo "FULL_ZIP=$FULL_ZIP"
+          } >> "$GITHUB_ENV"
+          echo "==> VERSION=$VERSION BUILD_NUMBER=$BUILD_NUMBER"
+          echo "==> FULL_DMG=$FULL_DMG  SLIM_ZIP=$SLIM_ZIP  FULL_ZIP=$FULL_ZIP"
+
       - name: Build .app bundle — Full seed (后续 M0 注入 runtime)
         working-directory: HarnessShell
+        env:
+          VERSION: ${{ env.VERSION }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
         run: ./Scripts/build-app.sh release
 
       # ====================================================================
@@ -87,10 +118,17 @@ jobs:
 
       - name: Package DMG — Full (主推档)
         working-directory: HarnessShell
+        env:
+          VERSION: ${{ env.VERSION }}
         run: ./Scripts/make-dmg.sh
 
       - name: Package ZIP — Full (parallel for fast download)
         working-directory: HarnessShell
+        env:
+          VERSION: ${{ env.VERSION }}
+          # make-zip.sh 默认 ZIP_NAME=${APP_NAME}.zip=HarnessShell.zip（无品牌无版本）；
+          # 这里显式传 versioned ZIP_NAME 与 Slim 档命名对齐
+          ZIP_NAME: ${{ env.FULL_ZIP }}
         run: ./Scripts/make-zip.sh
 
       # ====================================================================
@@ -110,17 +148,33 @@ jobs:
       - name: Package Slim ZIP — Slim 档 (无 bundled runtime)
         working-directory: HarnessShell
         env:
-          # tag 形如 v0.1.0；make-slim.sh 默认 VERSION=0.1.0 兜底
-          # （与 CHANGELOG.md [0.1.0] 段对齐；CHANGELOG 改时此 VERSION 也应同步）
-          VERSION_STR: ${{ inputs.tag }}
-        run: |
-          VERSION="${VERSION_STR#v}" ./Scripts/make-slim.sh
+          VERSION: ${{ env.VERSION }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+        run: ./Scripts/make-slim.sh
 
       - name: Compute SHA256 — 双档
         run: |
           cd HarnessShell/dist
           # 双行：Full DMG + Full ZIP + Slim ZIP（如有）+ 其他 .zip 变体
           shasum -a 256 *.dmg *.zip 2>/dev/null | tee SHA256SUMS
+
+      # ====================================================================
+      # appcast.xml 生成（Sparkle 2 兼容）：
+      #   - 复用 HarnessShell/Scripts/make-appcast.sh（Task #01a00575）
+      #   - 1 item × 2 enclosure（Full DMG + Slim ZIP），同 build 号
+      #   - sha256 走自定义 sha256 属性（proposal §4.1 B 方案约定，
+      #     与 Sparkle ed25519 edSignature 字段分离避免语义混淆）
+      #   - 维护语义：替换同 BUILD_NUMBER 的旧 item（去重），其余保留
+      #   - cron 链挂点由 Leader 同步（本工作流只补手动档）
+      # ====================================================================
+      - name: Generate appcast.xml — 双 enclosure (Full + Slim)
+        working-directory: HarnessShell
+        env:
+          VERSION: ${{ env.VERSION }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          FULL_DMG: ${{ env.FULL_DMG }}
+          SLIM_ZIP: ${{ env.SLIM_ZIP }}
+        run: ./Scripts/make-appcast.sh
 
       - name: Create GitHub Release — 双档上传
         env:
@@ -136,6 +190,15 @@ jobs:
             HarnessShell/dist/*.zip \
             HarnessShell/dist/SHA256SUMS
 
+      # appcast.xml 单独 --clobber 上传：re-run 同一 tag 时不冲突；
+      # Swift M1 按 releases/latest/download/appcast.xml 拉取（需 release 已 publish）
+      - name: Upload appcast.xml — Sparkle 通道稳定 URL
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload "$TAG" HarnessShell/dist/appcast.xml --clobber
+
       - name: Upload artifacts for debugging
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,6 +208,7 @@ jobs:
             HarnessShell/dist/*.dmg
             HarnessShell/dist/*.zip
             HarnessShell/dist/SHA256SUMS
+            HarnessShell/dist/appcast.xml
           retention-days: 14
 
 # ----------------------------------------------------------------------------
