@@ -1,32 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- 鲸群 WhalePod · token 版（色彩全部落 token 板）：四豚环逐
-       参照 whalepod-icon-user-ref.png 矢量重绘：四头鲸/豚首尾相逐成环（90° 旋转对称，弧间留缺口），
-       白身 + 青沿 + 深海蓝背三层错位叠印，亮蓝径向渐变底。
-       单豚为参数化圆弧身体（尾外头内径向倾斜，鼻钝圆，蝶形尾鳍外挂）。 -->
+  <!-- 鲸群 WhalePod · token 备选版（留档，不进三态全套；leader 裁决：保真版为正主）
+       参照 whalepod-icon-user-ref.png 矢量重绘（保真优先，leader 裁决）：
+       四头鲸/豚首尾相逐成环（90° 旋转对称，弧间缺口），白身 + 天青沿 + 圆形水影（腹侧深蓝影）。
+       单豚为参数化圆弧身体（环心为原点，鼻顺时针朝向前一尾），色值采样自参照图。 -->
   <defs>
     <radialGradient id="tileF" cx="0.5" cy="0.46" r="0.62">
       <stop offset="0" stop-color="#1B2140"/>
-      <stop offset="0.65" stop-color="#12152B"/>
+      <stop offset="0.55" stop-color="#12152B"/>
       <stop offset="1" stop-color="#0D1020"/>
     </radialGradient>
     <linearGradient id="bodyW" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EAFBFF"/>
+      <stop offset="1" stop-color="#F2FDFF"/>
     </linearGradient>
     <linearGradient id="rimC" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#67E8F9"/>
       <stop offset="1" stop-color="#22D3EE"/>
     </linearGradient>
+    <linearGradient id="shadowB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4D6BFE"/>
+      <stop offset="1" stop-color="#2C47C8"/>
+    </linearGradient>
 
     <path id="dp-body" d="M -169.6 -233.4 L -157.7 -240.6 L -145.8 -247.8 L -133.7 -254.8 L -121.5 -261.5 L -108.9 -267.5 L -95.9 -272.6 L -82.6 -276.6 L -68.9 -279.4 L -55.2 -282.2 L -41.7 -285.3 L -28.0 -288.3 L -14.1 -290.8 L 0.0 -291.9 L 14.1 -291.4 L 28.1 -289.9 L 42.3 -289.8 L 56.9 -290.5 L 71.7 -290.8 L 86.4 -289.5 L 100.5 -285.7 L 113.5 -278.8 L 125.1 -269.3 L 136.0 -259.1 L 147.1 -250.2 L 153.5 -234.3 L 159.3 -219.2 A 17.0 17.0 0 0 1 139.3 -191.7 L 126.1 -192.5 L 112.7 -191.7 L 103.3 -196.8 L 92.8 -199.8 L 82.4 -202.4 L 72.7 -206.6 L 63.5 -212.8 L 54.3 -220.4 L 44.7 -228.4 L 34.4 -235.7 L 23.4 -241.0 L 11.8 -243.6 L 0.0 -246.1 L -12.0 -248.9 L -24.4 -251.8 L -37.1 -253.9 L -49.9 -254.9 L -62.6 -254.1 L -75.2 -252.2 L -88.0 -250.1 L -100.9 -247.9 L -114.0 -245.3 L -127.0 -242.0 L -139.9 -237.8 L -152.4 -232.5 L -164.3 -226.1 A 4.5 4.5 0 0 1 -169.6 -233.4 Z"/>
+    <path id="dp-shadow" d="M -15.8 -250.8 L -3.3 -247.8 L 8.8 -245.2 L 20.8 -242.8 L 32.2 -238.0 L 43.0 -230.9 L 52.9 -222.7 L 62.4 -214.8 L 71.8 -208.2 L 81.7 -203.7 L 92.3 -200.9 L 103.1 -197.9 L 112.8 -192.8 L 126.3 -193.3 L 139.9 -192.5 L 139.3 -191.7 L 119.1 -182.3 L 101.8 -174.0 L 89.8 -172.4 L 78.0 -169.6 L 67.4 -167.9 L 58.4 -169.4 L 50.7 -174.5 L 43.4 -182.5 L 35.8 -192.5 L 27.5 -203.0 L 18.2 -212.9 L 8.0 -222.0 L -3.1 -232.9 L -15.6 -247.8 Z"/>
     <path id="dp-fluke" d="M 8 0 C 2 12 -18 32 -60 40 C -45 18 -39 5 -36 0 C -39 -5 -45 -18 -60 -40 C -18 -32 2 -12 8 0 Z"/>
     <path id="dp-fin" d="M 90.1 -202.4 C 101.5 -188.6 84.2 -174.4 68.4 -168.3 C 65.9 -182.5 69.6 -200.6 90.1 -202.4 Z"/>
 
-    <!-- 单豚：青沿（外扩）→ 蓝背（内缩）→ 白身 → 蝶形尾鳍（尾柄端矩阵定位）→ 胸鳍 -->
+    <!-- 单豚：天青沿（外扩 1.035）→ 白身 → 圆形水影（腹侧深蓝）→ 蝶形尾鳍 → 胸鳍 -->
     <g id="dolphin">
       <use href="#dp-body" transform="scale(1.035)" fill="url(#rimC)"/>
-      <use href="#dp-body" transform="scale(0.96)" fill="#4D6BFE"/>
       <use href="#dp-body" fill="url(#bodyW)"/>
+      <use href="#dp-shadow" fill="url(#shadowB)"/>
       <use href="#dp-fluke" transform="matrix(-0.8090 0.5878 -0.5878 -0.8090 -166.9310 -229.7608)" fill="url(#bodyW)"/>
       <use href="#dp-fin" fill="url(#rimC)"/>
     </g>
@@ -34,7 +39,7 @@
 
   <rect x="102" y="102" width="820" height="820" rx="186" fill="url(#tileF)"/>
 
-  <!-- 四豚环逐：120° 旋转对称 -->
+  <!-- 四豚环逐：90° 旋转对称 -->
   <g transform="translate(512,512)">
     <use href="#dolphin"/>
     <use href="#dolphin" transform="rotate(90)"/>

@@ -26,17 +26,18 @@ WhalePod 是 DeepSeek Harness（dsh）的桌面壳：一个容纳多个 agent �
 
 | 文件 | 用途 |
 |---|---|
-| `assets/whalepod-icon-final.svg` | **定稿源文件（保真版）**：四豚环逐，亮蓝径向底 + 白身/青沿/深海蓝背 |
-| `assets/whalepod-icon-final-token.svg` | token 备选版：深海暗底 + `--accent-spark` 青沿 + `--brand-primary` 蓝背（色彩全落 token 板，待 leader 裁定是否替换保真版） |
-| `assets/icon-master.svg` | 主图标（= 保真版）：macOS 圆角方块，亮蓝径向渐变底 + 四豚环逐 |
-| `assets/icon-dark-tile.svg` | 深底变体：深海暗底 + 青系海豚，用于深色 Dock / 深色营销背景 |
-| `assets/icon-mono.svg` | 单色模板：四豚环逐纯黑剪影（无底色），菜单栏（macOS template image）、favicon、印刷、水印 |
+| `assets/whalepod-icon-final.svg` | **定稿源文件（保真版）**：四豚环逐，深海蓝径向底 + 白身/天青沿/圆形水影；色值采样自参照图（leader 裁决：保真优先，不出 token 校准版） |
+| `assets/icon-master.svg` | 主图标（= 保真版）：macOS 圆角方块 + 四豚环逐 |
+| `assets/icon-dark-tile.svg` | 深底变体：同构图，深海暗底（`#0E1830→#050B18`），用于深色 Dock / 深色营销背景 |
+| `assets/icon-mono.svg` | 单色模板：四豚环逐纯黑剪影（无底色无水影层），菜单栏（macOS template image）、favicon、印刷、水印 |
+| `assets/whalepod-icon-final-token.svg` | token 备选版（**留档**，不进三态全套）：深海暗底 + `--accent-spark` 青沿 + `--brand-primary` 水影 |
 | `assets/whalepod-icon-user-ref.png` | 用户定稿参照原图（含水印，仅作参照，不用于任何产出） |
 
 ### 2.2 几何规范
 
 - 画板 1024×1024；圆角方块 820×820，圆角半径 186（≈22.4%，对齐 macOS continuous corner 视觉）；
 - 四豚环逐为参数化圆弧身体（单豚弧度 72°、环径 ~540、弧间缺口 18°），90° 旋转对称、环心居中于方块；
+- **外框为单层满版**：参照图的深海军蓝外边是生成画布（右下角水印所坐层），非图标本体；macOS 图标按 824 栅格满版（leader 裁决确认）；
 - 栅格导出尺寸：1024 / 512 / 256 / 128 / 64 / 32 / 16。**32px 及以下使用 mono 版**，彩色版在小尺寸三层错位会糊；
 - 最小展示尺寸：16px（favicon）。低于 16px 不允许使用该标志，用文字 "WhalePod" 代替。
 
