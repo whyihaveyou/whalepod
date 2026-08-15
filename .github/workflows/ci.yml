@@ -55,7 +55,7 @@ jobs:
         working-directory: packages/honeycomb
         run: pnpm run test
 
-      - name: 'Run deterministic test suite (11 pinned + native-runtime 条件纳入; live 自动 skip)'
+      - name: 'Run deterministic test suite (12 pinned + native-runtime 条件纳入; live 自动 skip)'
         working-directory: packages/honeycomb
         run: |
           set -euo pipefail
@@ -66,6 +66,8 @@ jobs:
           #   - transport-client-live : 需 server 可达，CI 无外部 deps 会因 connect 失败自动 skip
           #   - connector-live        : opencode 未安装 → 内部 t.skip 命中（recorded+mock 部分仍跑）
           #   - acp-adapter live 子集 : 同上（mock 部分 + 纯函数 100% 跑）
+          #   - acp-kimi-live       : live 三例需 RUN_ACP_LIVE=1 显式开启（CI 不设→skip）；
+          #     catalog/detect 两例默认跑，detect 在无 kimi 机器（CI）内部自 skip
           #
           # 顺序按「先快后慢」编排：纯函数（persistence/e2e-core）→ transport →
           # orchestration → connector → adapter；live 的放最后即便 skip 也消耗最小 wall time。
@@ -80,7 +82,8 @@ jobs:
             test/orchestration-loop.test.ts \
             test/watchdog-repro.test.ts \
             test/connector-live.test.ts \
-            test/acp-adapter.test.ts
+            test/acp-adapter.test.ts \
+            test/acp-kimi-live.test.ts
           # native-runtime.test.ts 由编排线即将合入（task #01a000cd-97ba 系列）；
           # 显式列进上面的 --test 清单时若文件缺席会直接 MODULE_NOT_FOUND 红掉，
           # 故存在才跑——合入后自动纳入，无需再改本文件。
