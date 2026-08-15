@@ -429,8 +429,13 @@ final class HarnessServiceManager {
 
     // MARK: - 工具
 
-    /// 合并环境变量：继承当前进程环境 + 配置的环境变量 + 补齐常见 PATH。
+    /// 合并环境变量：继承当前进程环境 + 配置的环境变量 + 补齐 PATH。
     /// OOBE-M2：注入 DSH_HOME 指向 WhalePod/harness（harness 数据根），config.environment 可覆盖。
+    ///
+    /// Bug#2（用户真机反馈「服务意外终止/反复重试」根因）：GUI 启动的应用只继承 Finder/Dock
+    /// 的极简 PATH，node/npm 常装在 ~/.local/opt/node/bin 等非标准位置（且写在 ~/.zshrc，
+    /// 而这里用 `zsh -lc` 登录 shell 不读 zshrc），导致 `npm exec` command not found、
+    /// 子进程秒退。必须运行时探测 node/npm 真实目录并置于 PATH 最前。
     private func mergedEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         for (k, v) in config.environment { env[k] = v }
@@ -438,12 +443,37 @@ final class HarnessServiceManager {
         if env["DSH_HOME"] == nil, !config.environment.keys.contains("DSH_HOME") {
             env["DSH_HOME"] = DataRoot.harnessHomeURL.path
         }
-        if let path = env["PATH"], !path.contains("/opt/homebrew/bin") {
-            env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + path
-        } else if env["PATH"] == nil {
-            env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        // PATH：探测到的 node/npm 目录优先，再继承原 PATH，最后兜底系统目录
+        var pathComponents = Self.discoveredNodeDirs()
+        if let path = env["PATH"], !path.isEmpty {
+            pathComponents.append(path)
         }
+        pathComponents.append(contentsOf: ["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+        var seen = Set<String>()
+        env["PATH"] = pathComponents.filter { seen.insert($0).inserted }.joined(separator: ":")
         return env
+    }
+
+    /// 探测本机 node/npm 的安装目录（按优先级），返回实际存在 node 或 npm 可执行文件的目录。
+    static func discoveredNodeDirs() -> [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/.local/opt/node/bin", // 本机实测：用户 node 在此（fnm/手动安装常见）
+            "\(home)/.nvm/current/bin",
+            "\(home)/.volta/bin",
+            "\(home)/.fnm/aliases/default/bin",
+            "/opt/homebrew/bin",           // Apple Silicon Homebrew
+            "/usr/local/opt/node/bin",
+            "/usr/local/bin",              // Intel Homebrew / 其他
+        ]
+        var found: [String] = []
+        for dir in candidates {
+            if FileManager.default.isExecutableFile(atPath: dir + "/npm") ||
+               FileManager.default.isExecutableFile(atPath: dir + "/node") {
+                found.append(dir)
+            }
+        }
+        return found
     }
 
     private func findExecutable(_ name: String) -> String? {
