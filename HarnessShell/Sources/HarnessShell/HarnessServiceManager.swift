@@ -126,8 +126,9 @@ final class HarnessServiceManager {
                     environment: mergedEnvironment()
                 )
             case .shell(let command):
+                // spawnInOwnGroup 会自动把 executablePath 补为 argv[0]，勿再自带程序名。
                 pid = try spawnInOwnGroup(
-                    arguments: ["zsh", "-lc", command],
+                    arguments: ["-lc", command],
                     workingDirectory: config.workingDirectory,
                     environment: mergedEnvironment()
                 )
@@ -277,6 +278,7 @@ final class HarnessServiceManager {
     // MARK: - posix_spawn（独立进程组 + 输出管道）
 
     /// 在独立进程组中启动命令，stdout/stderr 重定向到管道异步读取。
+    /// - 注意：`arguments` 不含程序名——argv[0] 由本函数自动以 resolved executablePath 补齐。
     /// - `requestedExecutable`：可选，指定可执行文件路径（OOBE-M0 bundled/nodeProbe 直接 exec node，
     ///   不走 zsh 包裹）。默认 nil = 按名查找 zsh（向后兼容现有 shell 路径）。
     private func spawnInOwnGroup(requestedExecutable: String? = nil,
@@ -339,7 +341,9 @@ final class HarnessServiceManager {
         posix_spawnattr_setpgroup(&attr, 0)
 
         // argv / envp
-        var argv: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
+        // argv[0] 必须是可执行文件本身（POSIX 惯例），否则 node 会把 arguments[0]
+        // （bin.js）当作程序名跳过，把 "web" 误判为入口脚本 → MODULE_NOT_FOUND（Bug#3）。
+        var argv: [UnsafeMutablePointer<CChar>?] = ([executablePath] + arguments).map { strdup($0) }
         argv.append(nil)
         defer { argv.forEach { free($0) } }
 
