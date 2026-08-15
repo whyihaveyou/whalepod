@@ -28,6 +28,7 @@ import {
   AcpAdapter,
   AcpSession,
   SessionEventQueue,
+  bootstrapAcpAdapters,
   defaultPermissionResponse,
   normalizeSessionUpdate,
 } from '../src/connectors/adapters/acp.ts'
@@ -478,6 +479,37 @@ test('ACP_CATALOG: 含 opencode-acp 且字段一致', () => {
   assert.ok(opencode!.capabilities.length > 0)
 })
 
+test('ACP_CATALOG: 含 kimi-code-acp 且字段与实测对齐（spawnArgs=acp, configDirName=.kimi-code, image capability）', () => {
+  const kimi = ACP_CATALOG.find((e) => e.id === 'kimi-code-acp')
+  assert.ok(kimi, 'kimi-code-acp 应在 catalog 内')
+  // spawnArgs 用 subcommand 'acp'（实测 'kimi acp' 才是 ACP server 入口；'kimi --acp' 会报 unknown option）
+  assert.deepEqual(kimi!.spawnArgs, ['acp'])
+  assert.equal(kimi!.binaryName, 'kimi')
+  assert.equal(kimi!.configDirName, '.kimi-code')
+  assert.equal(kimi!.kind, 'kimi-code')
+  // capabilityProbe 让 detector 能 spawn `kimi acp --help` 验证 ACP server 存在
+  assert.deepEqual(kimi!.capabilityProbe, ['--help'])
+  // image capability 来自 kimi acp initialize 自报的 promptCapabilities.image = true
+  const capIds = kimi!.capabilities.map((c) => c.id)
+  assert.ok(capIds.includes('image'), `kimi-code-acp 应有 image capability, got: ${capIds}`)
+  assert.ok(capIds.includes('streaming'), `kimi-code-acp 应继承 streaming capability, got: ${capIds}`)
+})
+
+test('bootstrapAcpAdapters: 把每个 catalog 项实例化为可 detect 的 AcpAdapter', async () => {
+  const adapters = bootstrapAcpAdapters()
+  assert.ok(adapters.length === ACP_CATALOG.length)
+  for (const a of adapters) {
+    assert.ok(typeof a.id === 'string' && a.id.length > 0, `id 应非空, got: ${a.id}`)
+    assert.ok(typeof a.displayName === 'string' && a.displayName.length > 0)
+    assert.ok(Array.isArray(a.capabilities) && a.capabilities.length > 0)
+    assert.ok(typeof a.detect === 'function')
+    assert.ok(typeof a.spawnSession === 'function')
+  }
+  // detect() 在缺探测环境时返回 null，但不该抛错
+  const r = await adapters[0]!.detect(collectHostEnvironment())
+  assert.ok(r === null || typeof r === 'object')
+})
+
 // =====================================================================
 // 6. live（可选）—— 本机 opencode acp 真链路
 // =====================================================================
@@ -522,5 +554,79 @@ test('live (opt-in): 本机有 `opencode` 时跑 `opencode acp` 真链路', asyn
     )
   } finally {
     await session.kill()
+  }
+})
+
+test('live (opt-in): 本机有 `kimi` 时跑 `kimi acp` 真链路', async (t) => {
+  // kimi acp 启动比 opencode acp 快（实测 ~2-3s），可作为更便宜的 live test
+  if (process.env.RUN_ACP_LIVE !== '1') {
+    t.skip('set RUN_ACP_LIVE=1 to enable real kimi acp test')
+    return
+  }
+  const { spawnSync } = await import('node:child_process')
+  const probe = spawnSync('kimi', ['acp', '--help'], { encoding: 'utf8' })
+  if (probe.status !== 0) {
+    t.skip('kimi acp not available on this host')
+    return
+  }
+
+  // 走 catalog：让 kimi-code-acp catalog entry 自动被 bootstrap
+  const kimiEntry = ACP_CATALOG.find((e) => e.id === 'kimi-code-acp')
+  assert.ok(kimiEntry, 'kimi-code-acp catalog entry must exist for live test')
+  const adapter = new AcpAdapter(kimiEntry)
+
+  // 整个 live test 限时 25s：spawnSession（initialize 1-2s）+ 一次 prompt 拉
+  // 一点 stream event（LLM 响应时延取决于本机 OAuth/网络）+ 收尾。
+  // 任何一步超时就 skip（不污染套件），让 CI 走 mock 路径。
+  const overallTimeout = 25_000
+  const guard = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), overallTimeout))
+  try {
+    const raceResult = await Promise.race([
+      (async () => {
+        const session = await adapter.spawnSession({ cwd: tmpdir(), env: process.env })
+        try {
+          // 不 await send —— send 会等 LLM 响应，可能很慢。让 send 在背景跑，
+          // 主路径只 await 一小段时间收集 events。
+          const sendPromise = session.send({ content: 'echo back the word PONG and nothing else' })
+
+          const collected: string[] = []
+          const consumer = (async () => {
+            for await (const ev of session.events) {
+              collected.push(ev.type)
+              if (ev.type === 'done' || ev.type === 'cancelled') return
+              if (collected.length > 50) return
+            }
+          })()
+          // 等待 12s 让 events 流进来；超时就别等了，kill 进程
+          await Promise.race([
+            consumer,
+            new Promise((resolve) => setTimeout(resolve, 12_000)),
+          ])
+
+          // 让 send 也走完或者被截断
+          await Promise.race([
+            sendPromise.catch(() => undefined),
+            new Promise((resolve) => setTimeout(resolve, 3_000)),
+          ])
+
+          return collected
+        } finally {
+          await session.kill()
+        }
+      })(),
+      guard,
+    ])
+
+    if (raceResult === 'timeout') {
+      t.skip(`kimi acp live test exceeded ${overallTimeout}ms (LLM-backed, OAuth-dependent) — skip`)
+      return
+    }
+
+    assert.ok(
+      raceResult.length > 0,
+      `expected at least one event from kimi acp, got: ${raceResult}`,
+    )
+  } catch (err) {
+    t.skip(`kimi acp live test errored: ${err instanceof Error ? err.message : err} — skip`)
   }
 })

@@ -47,12 +47,27 @@ ACP 是 @agentclientprotocol 主导的跨厂商协议（JSON-RPC 2.0 over stdio 
 | ----------------------------- | --------------------------------- |
 | `agent_message_chunk` (text)  | `stream` chunk                    |
 | `agent_thought_chunk` (text)  | `stream` chunk（透传）） |
-| `agent_message_chunk` (image) | （忽略 —— 未来 image 适配时再加） |
+| `agent_message_chunk` (image) | （忽略 —— ③ image 透传 待实现；kimi acp 已声明 image capability 但当前 adapter 还没启用 image 事件分支） |
 | `tool_call`                   | `tool-call` + `tool-result`（如完成）|
 | `tool_call_update`            | `tool-result`（仅 completed/failed）|
 | `plan` / `plan_update` / …    | （忽略，纯展示/状态）             |
 
 Permission 请求默认 fail-closed（`{ outcome: 'cancelled' }`）；harness 可在后续版本通过 `ctx.onPermissionRequest` 注入 UI 决策。
+
+### 已接入 ACP agent 清单
+
+`ACP_CATALOG` 当前包含：
+
+| ID                | binary   | spawnArgs  | capabilityProbe  | 关键 capability 来源                          | configDir       |
+| ----------------- | -------- | ---------- | ---------------- | --------------------------------------------- | --------------- |
+| `opencode-acp`    | `opencode` | `['acp']`  | `['--help']`     | 通用 streaming/tool-use                       | `.opencode`     |
+| `kimi-code-acp`   | `kimi`     | `['acp']`  | `['--help']`     | streaming/tool-use/**image**（自报）         | `.kimi-code`    |
+
+接入的两种姿势：
+- **走 catalog**：在 `connectors/adapters/acp.ts` 的 `ACP_CATALOG` 追加 `AcpCatalogEntry`，再 `bootstrapAcpAdapters()` 一键实例化所有 catalog 项。
+- **走运行时探测**：detector 跑 `probeAcp` 时会同时探测 catalog 里的每一项，能命中且 `capabilityProbe` 退出码 0 的会出现在 `discoverAll()` 的结果里（`descriptor.acp` 字段被填上）。
+
+`gemini-cli-acp` 是为 `npx -y @google/gemini-cli` 准备的 catalog 模板（已注释），待用户本机安装后可取消注释启用。
 
 ## Onboarding 步骤
 
@@ -64,7 +79,7 @@ Permission 请求默认 fail-closed（`{ outcome: 'cancelled' }`）；harness �
 
 ### Step 2：写一个 1 行的 Catalog 追加
 
-打开 `packages/honeycomb/src/connectors/adapters/acp.ts`，在 `ACP_CATALOG` 里追加：
+打开 `packages/honeycomb/src/connectors/adapters/acp.ts`，在 `ACP_CATALOG` 里追加（以 `kimi-code-acp` 为真实案例）：
 
 ```ts
 export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
@@ -74,16 +89,29 @@ export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
     /* ... */
   },
 
-  // ↓ 新增 ↓
+  // 已有：kimi-code-acp（实测可用 kimi 0.34.0）
   {
-    id: 'my-agent-acp',           // 唯一 ID，会成为 MemberRuntime 后端的字符串
-    displayName: 'My Agent (ACP)', // UI 显示名
-    kind: 'opencode',              // 归类（复用现有 AgentKind：opencode/kimi-code/...）
-    binaryName: 'my-agent',        // PATH 上的二进制名
-    spawnArgs: ['--acp'],          // 触发 ACP 模式的 argv
-    capabilityProbe: ['--help'],   // 可选的存在性 probe（exit 0 视为可用）
-    configDirName: '.my-agent',    // 配置目录名（detect 第 3 层）
-    capabilities: ACP_DEFAULT_CAPABILITIES,
+    id: 'kimi-code-acp',
+    displayName: 'Kimi Code (ACP)',
+    kind: 'kimi-code',              // 复用 AgentKind 联合；新增 agent 需要先扩联合
+    binaryName: 'kimi',             // PATH 上的二进制名
+    spawnArgs: ['acp'],             // kimi 用 subcommand 而非 flag（实测 'kimi --acp' 报 unknown option）
+    capabilityProbe: ['--help'],    // 探活：'kimi acp --help' exit 0 即视为可用
+    configDirName: '.kimi-code',
+    // 从 kimi acp initialize 响应里取自报能力，加上 image（promptCapabilities.image=true）
+    capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image' }],
+  },
+
+  // ↓ 新接入的 agent ↓
+  {
+    id: 'my-agent-acp',             // 唯一 ID，会成为 MemberRuntime 后端的字符串
+    displayName: 'My Agent (ACP)',  // UI 显示名
+    kind: 'claude-code',            // 归类（需先在 AgentKind 联合里加；或复用已有）
+    binaryName: 'my-agent',         // PATH 上的二进制名
+    spawnArgs: ['acp'],             // 触发 ACP 模式的 argv（subcommand 或 flag 按实测）
+    capabilityProbe: ['--help'],    // 可选的存在性 probe（exit 0 视为可用）
+    configDirName: '.my-agent',     // 配置目录名（detect 第 3 层）
+    capabilities: ACP_DEFAULT_CAPABILITIES,  // 或追加 image/mcp-http 等自报能力
   },
 ]
 ```
@@ -92,7 +120,20 @@ export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
 
 如果 agent 与现有 family 同族（opencode/kimi-code/hermes/claude-code/codex），用对应的 kind 字符串。如果不属于任何一族，编辑 `packages/honeycomb/src/connectors/types.ts` 的 `AgentKind` union 追加你的 kind。
 
-### Step 4：跑测试
+### Step 4（必做）：把新条目 bootstrap 进 registry
+
+把 `ACP_CATALOG` 实例化成 `AcpAdapter` 并注册到 connector registry（这一步是 catalog 真正「活」起来的必要条件）：
+
+```ts
+import { bootstrapAcpAdapters } from '@whalepod/honeycomb/connectors/adapters/acp'
+for (const adapter of bootstrapAcpAdapters()) {
+  registry.register(adapter)  // 或 ctx.roster.registerRuntime / 你的实际注册点
+}
+```
+
+`bootstrapAcpAdapters()` 是 `acp.ts` 导出的便利函数：把 catalog 每一项 `new AcpAdapter(entry)` 包装好。它默认覆盖 `opencode-acp` 和 `kimi-code-acp`。4 家 stdio 适配器（claude-code/codex/kimi-code/opencode/hermes）各有自己的注册路径，不在此统一 bootstrap（避免越界改他们）。
+
+### Step 5：跑测试
 
 ```sh
 cd /Users/qzp/aion2dsh/packages/honeycomb
@@ -111,7 +152,7 @@ RUN_ACP_LIVE=1 pnpm tsx --test --test-timeout=30000 test/acp-adapter.test.ts
 
 跑本机真 agent 二进制，需要 `my-agent` 在 PATH 上。
 
-### Step 5（可选）：为它写一个 connector-specific override
+### Step 6（可选）：为它写一个 connector-specific override
 
 如果某些 agent 的 argv 形态特殊（例如要传 `--port` 或 `--config`），可在 `ACP_CATALOG` 里 `spawnArgs` 加额外参数；如果要求更细的协议映射（如特殊 plan schema），可以 fork `normalizeSessionUpdate` —— 但通常不需要。
 
@@ -190,19 +231,23 @@ test/acp-adapter.test.ts
 ├─ 5b. cancel() (2 用例)
 │     - mid-turn cancel → stream + cancelled（不再有 done）
 │     - idle cancel → no-op，不影响后续 send → done
-├─ 6. ACP_CATALOG sanity (1 用例)
-│     - 含 opencode-acp 且字段一致
-└─ 7. live opt-in (1 用例, RUN_ACP_LIVE=1)
+├─ 6. ACP_CATALOG sanity (2 用例)
+│     - opencode-acp 字段一致
+│     - kimi-code-acp 字段与实测对齐（spawnArgs=acp, image capability）
+├─ 6b. bootstrapAcpAdapters (1 用例)
+│     - ACP_CATALOG 每一项都能实例化为 AcpAdapter
+└─ 7. live opt-in (2 用例, RUN_ACP_LIVE=1)
       - 本机 opencode acp 真链路
+      - 本机 kimi acp 真链路（OAuth-backed, 25s 限时防拖慢套件）
 ```
 
 跑法：
 
 ```sh
-# 默认（16 用例 + 1 skip live）
+# 默认（18 用例 + 2 skip live）
 pnpm tsx --test test/acp-adapter.test.ts
 
-# 启用 live 测试（需本机 opencode）
+# 启用 live 测试（需本机 opencode 和/或 kimi）
 RUN_ACP_LIVE=1 pnpm tsx --test --test-timeout=30000 test/acp-adapter.test.ts
 ```
 

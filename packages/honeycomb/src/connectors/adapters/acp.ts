@@ -96,17 +96,46 @@ export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
     configDirName: '.opencode',
     capabilities: ACP_DEFAULT_CAPABILITIES,
   },
-  // 未来追加示例（取消注释即可启用）：
+  {
+    id: 'kimi-code-acp',
+    displayName: 'Kimi Code (ACP)',
+    kind: 'kimi-code',
+    binaryName: 'kimi',
+    // `kimi` 的 ACP 入口是 subcommand `acp`（不是 `--acp` flag），实测确认
+    // （kimi 0.34.0，`kimi acp --help` exit 0；`kimi --acp` 报 "unknown option"）。
+    spawnArgs: ['acp'],
+    capabilityProbe: ['--help'],
+    configDirName: '.kimi-code',
+    // Kimi acp 自报能力（实测 initialize 响应）：
+    //   promptCapabilities.image = true  →  加 image
+    //   promptCapabilities.embeddedContext = true
+    //   sessionCapabilities.{list, resume, close, delete, fork, additionalDirectories} = true
+    //     → resume 即 session/load（catalog 暂不暴露，follow-up #① session/load 实现后加 loadSession 字段）
+    //   mcpCapabilities.{http, sse} = true →  暂不暴露，等 MCP 集成落地再补
+    capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image', description: 'Accept image content in prompt' }],
+  },
+  // 未来追加示例：取消注释即可启用。`gemini-cli-acp` 用 Google 官方
+  // @google/gemini-cli 提供的 `gemini --acp`（或 subcommand `acp`，待 gemini 版本确认）。
   // {
-  //   id: 'kimi-code-acp',
-  //   displayName: 'Kimi Code (ACP)',
-  //   kind: 'kimi-code',
-  //   binaryName: 'kimi',
+  //   id: 'gemini-cli-acp',
+  //   displayName: 'Gemini CLI (ACP)',
+  //   kind: 'claude-code', // 需要新增 'gemini-cli' 到 AgentKind 联合
+  //   binaryName: 'gemini',
   //   spawnArgs: ['--acp'],
-  //   configDirName: '.kimi',
-  //   capabilities: ACP_DEFAULT_CAPABILITIES,
+  //   capabilityProbe: ['--version'],
+  //   configDirName: '.gemini',
+  //   capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image' }],
   // },
 ]
+
+/**
+ * 把 `ACP_CATALOG` 里的每一项实例化为 `AcpAdapter`，供 registry.register() 批量接入。
+ * 启动时一行 `for (const a of bootstrapAcpAdapters()) registry.register(a)` 即可。
+ * 4 家 stdio 适配器（claude-code / codex / kimi-code / opencode / hermes）各有自己的注册路径，不在此处统一 bootstrap。
+ */
+export function bootstrapAcpAdapters(): AgentAdapter[] {
+  return ACP_CATALOG.map((entry) => new AcpAdapter(entry))
+}
 
 // ---------- ACP → SessionEvent 规范化 ----------
 
