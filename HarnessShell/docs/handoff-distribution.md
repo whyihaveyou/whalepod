@@ -32,12 +32,14 @@
 | 探测链命中 | P1 `bundled` | P3 `npxFallback`（无 node 则 `unavailable`） |
 | 产物命名 | `WhalePod-<ver>-macos-arm64-full.dmg` | `WhalePod-<ver>-macos-arm64-slim.zip` |
 
-### 当前两个工件 + 校验值（v0.1.0 / 基线 `ff4039b`）
+### 当前两个工件 + 校验值（v0.1.0-alpha.3 / 基线 tag `v0.1.0-alpha.3`）
 
 | 档 | 文件 | 大小 | SHA-256 |
 | --- | --- | --- | --- |
-| Full | `HarnessShell/dist/HarnessShell.dmg` | 224,252,627 B（≈214MB） | `2dd5baec32502070ac157908ae9975283fbed42f86a2c6ddc346d46c0a31db1d` |
-| Slim | `HarnessShell/dist/WhalePod-0.1.0-macos-arm64-slim.zip` | 1,154,947 B（≈1.1MB） | `cedf797bacf2cef9e3fc6178377f5fe4a52bb7e657fefdd449d5e145309ed8a1` |
+| Full | `HarnessShell/dist/HarnessShell.dmg` | 215,889,736 B（≈206MB） | `0f0589250de413873429d3d7ae5d92cec13f5390bd17edfe702193e163a0bcf2` |
+| Slim | `HarnessShell/dist-slim/WhalePod-0.1.0-alpha.3-macos-arm64-slim.zip` | 1,154,969 B（≈1.1MB） | `e26cf1a710b97d2fa67c5d025414036eb49f55cbf6299e58dc85793f62aa2f30` |
+
+验收快照（alpha.3）：DMG env -i 裸环境 bundled 冷启 20s 端口解析+HTTP 200 ✓；Slim 剥 node → unavailable 指引常驻不崩 ✓、正常环境 npxFallback 15s HTTP 200 ✓。
 
 > ⚠️ SHA-256 随每次构建变化，本节为**当时发布快照**；日常发布请以构建日志/make-slim.sh 输出为准。
 
