@@ -25,6 +25,10 @@ coverage/
 .idea/
 .vscode/
 
+# 本团队私有 AI 工具 skill 缓存（aion/kimi — 公开前必须 ignore）
+.aionrs/
+.kimi/
+
 # 用户运行时配置与数据（绝不入库）
 ~/.harness-shell/
 .harness-shell/

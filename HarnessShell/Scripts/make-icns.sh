@@ -1,17 +1,23 @@
 #!/bin/bash
 # =============================================================================
-# make-icns.sh — 把 design/assets 的 DFH 图标（SVG+PNG）转成 .icns
+# make-icns.sh — 把 design/assets 的图标（SVG+PNG）转成 .icns
 #
-# 输入：/Users/qzp/aion2dsh/design/assets/{icon-master,icon-dark-tile,icon-mono}.svg
+# 输入：$ROOT/../design/assets/*.svg（详见下方 ICON_SPECS）
 # 输出：HarnessShell/Resources/{AppIcon,IconDarkTile,IconMono}.icns
 #
 # 依赖：qlmanage（macOS 自带）、sips（macOS 自带）、iconutil（macOS 自带）
 # 说明：SVG 由 qlmanage 渲染成 1024x1024 PNG 作为 icns 主图（icns 最大尺寸 ic10=1024@2x）。
+#
+# 2026-08-15 修正：原 ASSETS 硬编码 /Users/qzp/aion2dsh/design/assets（仅本机可用）。
+#               改为 ROOT 相对，跨机/容器/CI 都能跑。
+# TODO(rebrand)：ICON_SPECS 仍引用旧 icon-master/icon-dark-tile/icon-mono.svg
+#               （rebrand 后已不存在，新图标是 whalepod-icon-final.svg 等）。
+#               下一步打包链路需把 ICON_SPECS 切到新文件名 —— 留给打包 owner。
 # =============================================================================
 set -eo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ASSETS="/Users/qzp/aion2dsh/design/assets"
+ASSETS="$ROOT/../design/assets"
 RES="$ROOT/Resources"
 WORK="$(mktemp -d /tmp/dsh-icns.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
