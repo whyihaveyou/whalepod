@@ -7,11 +7,11 @@
 | 项 | 值 |
 | --- | --- |
 | 文件 | `HarnessShell/dist/HarnessShell.dmg`（仓库内路径） |
-| 大小 | 231,647,587 字节（≈ 221 MB） |
-| SHA-256 | `9e149cabe7ccbde1d4fc57ed7b98c648430ddc19ed85f15b7916589217f1ad5a` |
+| 大小 | 224,252,627 字节（≈ 214 MB） |
+| SHA-256 | `2dd5baec32502070ac157908ae9975283fbed42f86a2c6ddc346d46c0a31db1d` |
 | 完整性 | `hdiutil verify` CRC 校验通过 |
 | 代码基线 | commit `ff4039b`（含 Bug#3 修复，2026-08-15） |
-| 建议对外版本号 | `v0.1.0-alpha`（首个公开测试版；尚未打 git tag/Release） |
+| 建议对外版本号 | `v0.1.0-alpha.2`（当前最新；每日小版本节奏更新） |
 
 **dist/ 目录下的 `HarnessShell.zip`（850KB）是旧骨架残留，严禁对外分发，只用上述 DMG。**
 
@@ -40,7 +40,7 @@ macOS 桌面壳（Swift/WKWebView）包裹 DeepSeek Harness 的 Web 界面，**�
 4. 校验下载完整性（可选，放网站给用户自查）：
    ```bash
    shasum -a 256 ~/Downloads/HarnessShell.dmg
-   # 应输出：9e149cabe7ccbde1d4fc57ed7b98c648430ddc19ed85f15b7916589217f1ad5a
+   # 应输出：2dd5baec32502070ac157908ae9975283fbed42f86a2c6ddc346d46c0a31db1d
    ```
 
 ## 五、产品行为要点（写 FAQ / 排障文档时用）
