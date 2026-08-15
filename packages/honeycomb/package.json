@@ -1,7 +1,7 @@
 {
   "name": "@whalepod/honeycomb",
   "version": "0.1.0",
-  "description": "DFH Workstation multi-agent orchestration core — concept-level reimplementation on Cordis primitives (Hive / Queen / Worker / Roster / Ledger / Courier / Mandate).",
+  "description": "WhalePod multi-agent orchestration core — concept-level reimplementation on Cordis primitives (Hive / Queen / Worker / Roster / Ledger / Courier / Mandate).",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

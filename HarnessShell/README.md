@@ -1,4 +1,6 @@
-# HarnessShell — DeepSeek Harness 桌面壳（MVP）
+# 鲸群 WhalePod — DeepSeek Harness 桌面壳（MVP）
+
+> A Pod of Agents, Powered by DeepSeek Harness
 
 macOS 最小桌面壳：`WKWebView` 内嵌加载本地 harness Web UI，并内置进程管理器用于
 启动/停止 harness 服务。**默认自动分配随机回环端口**（规避端口冲突），支持**单实例锁**（防多开）。
@@ -15,12 +17,12 @@ HarnessShell/
 ├── Sources/HarnessShell/
 │   ├── main.swift                 # 程序入口（纯代码，无 storyboard）+ 单实例守护
 │   ├── SingleInstance.swift       # 单实例锁：flock 文件锁 + NSRunningApplication 聚焦
-│   ├── AppDelegate.swift          # 应用生命周期 + 主菜单 + dsh:// 深链入口
+│   ├── AppDelegate.swift          # 应用生命周期 + 主菜单 + whale:// 深链入口
 │   ├── MainWindowController.swift # 主窗口：工具条(占位视觉) + WKWebView + 覆盖层 + 深链桥接
 │   ├── HarnessServiceManager.swift# 进程管理器：posix_spawn 独立进程组 + 端口注入/解析 + killpg 停止 + 崩溃退避
-│   ├── DeepLink.swift             # dsh:// 深链解析器（open?port= / session/<id> / unknown）+ Web 载荷
-│   ├── ServiceConfig.swift        # 服务配置（命令/工作目录/端口，可被 ~/.harness-shell/config.json 覆盖）
-│   └── Info.plist                 # 应用配置（localhost ATS 豁免 + dsh:// CFBundleURLTypes）
+│   ├── DeepLink.swift             # whale:// 深链解析器（open?port= / session/<id> / unknown）+ Web 载荷
+│   ├── ServiceConfig.swift        # 服务配置（命令/工作目录/端口，可被 ~/Library/Application Support/WhalePod/config.json 覆盖）
+│   └── Info.plist                 # 应用配置（localhost ATS 豁免 + whale:// CFBundleURLTypes）
 └── README.md
 ```
 
@@ -58,7 +60,7 @@ swift run            # 或 swift build 后运行 .build/debug/HarnessShell
 
 `port` 语义：**`0`=自动随机端口（默认）**；**正整数**=固定端口。
 
-如需自定义（换命令、指定工作目录、指定端口），创建 `~/.harness-shell/config.json`：
+如需自定义（换命令、指定工作目录、指定端口），创建 `~/Library/Application Support/WhalePod/config.json`（旧路径 `~/.harness-shell/config.json` 仍兼容）：
 
 ```json
 {
@@ -115,14 +117,14 @@ swift run            # 或 swift build 后运行 .build/debug/HarnessShell
 策略常量集中在 `HarnessServiceManager.swift`：
 `restartBaseDelay=1s` · `restartMaxDelay=30s` · `maxConsecutiveCrashes=5`。
 
-## dsh:// 深链
+## whale:// 深链
 
-应用注册 `dsh://` URL scheme（`Info.plist` 的 `CFBundleURLTypes`），支持外部唤起：
+应用注册 `whale://` URL scheme（`Info.plist` 的 `CFBundleURLTypes`），支持外部唤起：
 
 | 格式 | 动作 |
 | --- | --- |
-| `dsh://open?port=3080` | 打开指定端口的 harness 实例（直接加载对应地址） |
-| `dsh://session/<id>` | 路由到某个 session（交给 Web 端按 sessionId 处理） |
+| `whale://open?port=3080` | 打开指定端口的 harness 实例（直接加载对应地址） |
+| `whale://session/<id>` | 路由到某个 session（交给 Web 端按 sessionId 处理） |
 | 其他 | 落入 `.unknown`，原样桥接给 Web 端 |
 
 行为：
@@ -143,13 +145,13 @@ swift run            # 或 swift build 后运行 .build/debug/HarnessShell
 ### 深链测试
 
 ```bash
-# 1) 先在 Xcode/SPM 里启动 HarnessShell（确保已注册 dsh://）
+# 1) 先在 Xcode/SPM 里启动 WhalePod（确保已注册 whale://）
 # 2) 用 open 唤起：
-open 'dsh://open?port=3080'        # 应聚焦窗口并加载 3080 实例
-open 'dsh://session/abc-123'       # 应聚焦窗口并把 session 事件桥接给 Web 端
+open 'whale://open?port=3080'        # 应聚焦窗口并加载 3080 实例
+open 'whale://session/abc-123'       # 应聚焦窗口并把 session 事件桥接给 Web 端
 ```
 
-> 提示：`open 'dsh://...'` 会优先唤起已在运行的实例（聚焦 + 路由）；
+> 提示：`open 'whale://...'` 会优先唤起已在运行的实例（聚焦 + 路由）；
 > 若应用未运行则冷启动后路由。
 
 

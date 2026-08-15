@@ -146,8 +146,8 @@ func expectLink(_ raw: String, _ match: (DeepLink.Action) -> Bool, _ name: Strin
     }
     expect(match(dl.action), "\(name) \(raw)")
 }
-expectLink("dsh://open?port=3080", { if case .open(let p) = $0 { return p == 3080 }; return false }, "open?port 解析")
-expectLink("dsh://session/abc-123", { if case .session(let id) = $0 { return id == "abc-123" }; return false }, "session 解析")
-expect(DeepLink.parse(URL(string: "http://localhost:3080")!) == nil, "非 dsh:// 返回 nil")
+expectLink("whale://open?port=3080", { if case .open(let p) = $0 { return p == 3080 }; return false }, "open?port 解析")
+expectLink("whale://session/abc-123", { if case .session(let id) = $0 { return id == "abc-123" }; return false }, "session 解析")
+expect(DeepLink.parse(URL(string: "http://localhost:3080")!) == nil, "非 whale:// 返回 nil")
 
 print("🎉 冒烟测试全部通过")

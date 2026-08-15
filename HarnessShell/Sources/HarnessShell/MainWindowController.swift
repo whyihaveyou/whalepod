@@ -45,7 +45,7 @@ final class MainWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "DeepSeek Harness 桌面壳"
+        window.title = "鲸群 WhalePod"
         // 壳视觉规范 §2：暗色默认 + 融合式标题栏（交通灯悬浮在工具条左端）
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = ShellTokens.Color.bgApp

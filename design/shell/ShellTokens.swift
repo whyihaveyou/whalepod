@@ -1,6 +1,6 @@
 import AppKit
 
-/// DFH Workstation 设计 token — AppKit 落地常量。
+/// WhalePod 设计 token — AppKit 落地常量。
 /// 唯一权威源：design/tokens/tokens.css（暗色优先）。
 /// 规范文档：design/shell/shell-visual-spec.md。
 /// 本文件为零依赖 drop-in：复制进 Sources/HarnessShell/ 即可用。

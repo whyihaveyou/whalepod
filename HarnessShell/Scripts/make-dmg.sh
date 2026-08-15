@@ -12,7 +12,7 @@
 # 环境变量：
 #   APP_NAME     默认 HarnessShell
 #   DIST_DIR     默认 dist
-#   VOLUME_NAME  挂载卷名，默认 "DFH Workstation"
+#   VOLUME_NAME  挂载卷名，默认 "WhalePod"
 #   SIGN_IDENTITY dmg 签名身份；默认 "-"（ad-hoc，跳过对 dmg 的额外签名）
 #   STAGING_TMP  调试用：保留临时目录（默认清理）
 # =============================================================================
@@ -23,7 +23,7 @@ cd "$ROOT"
 
 APP_NAME="${APP_NAME:-HarnessShell}"
 DIST_DIR="${DIST_DIR:-dist}"
-VOLUME_NAME="${VOLUME_NAME:-DFH Workstation}"
+VOLUME_NAME="${VOLUME_NAME:-WhalePod}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 STAGING_TMP="${STAGING_TMP:-0}"
 

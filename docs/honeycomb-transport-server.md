@@ -1,7 +1,7 @@
 # @whalepod/honeycomb transport 真网络服务接入说明
 
-> 文档编号：DFH-WS / HONEY-006
-> 产品：DFH Workstation
+> 文档编号：WP / HONEY-006
+> 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：定稿（任务 #01a00107）

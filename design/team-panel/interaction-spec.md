@@ -1,4 +1,4 @@
-# 交互规范 — DFH Workstation 团队管理面板
+# 交互规范 — 鲸群 WhalePod 团队管理面板
 
 ---
 

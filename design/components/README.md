@@ -1,4 +1,4 @@
-# 组件规范 — DFH Workstation 团队面板
+# 组件规范 — 鲸群 WhalePod 团队面板
 
 > 版本：v0.1 · 作者：视觉-K3-2
 > 定位：**实现方可直接照做的组件级规范**。token 唯一权威为 [../tokens/tokens.css](../tokens/tokens.css)（+ [../tokens/tokens.json](../tokens/tokens.json)）；本目录只定义组件的解剖、变体、状态、尺寸、token 绑定与可访问性，不重复定义 token 值。

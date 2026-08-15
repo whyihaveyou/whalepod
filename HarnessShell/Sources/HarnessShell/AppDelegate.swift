@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 深链入口：应用已在运行（或冷启动早于 didFinishLaunching 时）由系统回调。
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first, let link = DeepLink.parse(url) else {
-            // 非 dsh:// 或无法解析的 URL：忽略（不打断当前会话）
+            // 非 whale:// 或无法解析的 URL：忽略（不打断当前会话）
             return
         }
         if let controller = windowController {

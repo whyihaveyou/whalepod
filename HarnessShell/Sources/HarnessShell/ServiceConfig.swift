@@ -3,10 +3,11 @@ import Foundation
 /// 服务配置：决定要启动/停止哪个 harness 服务、监听哪个端口。
 ///
 /// 配置来源（优先级从高到低）：
-/// 1. `~/.harness-shell/config.json`（推荐，字段全部可选，缺省回落到默认值）
+/// 1. `~/Library/Application Support/WhalePod/config.json`（推荐，字段全部可选，缺省回落到默认值；
+///    旧路径 `~/.harness-shell/config.json` 仍兼容读取，迁移逻辑见 Migration.swift）
 /// 2. 内置默认值
 ///
-/// 配置文件示例（~/.harness-shell/config.json）：
+/// 配置文件示例（~/Library/Application Support/WhalePod/config.json）：
 /// ```json
 /// {
 ///   "command": "npm exec @deepseek-ai/dsh web",

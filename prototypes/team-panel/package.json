@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
-  "description": "DFH Workstation 团队管理面板 — React + Vite + TS 原型（mock 数据版）",
+  "description": "WhalePod 团队管理面板 — React + Vite + TS 原型（mock 数据版）",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",

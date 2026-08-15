@@ -1,7 +1,7 @@
 # @whalepod/honeycomb 编排循环设计（consumer/orchestration-loop.ts 详解）
 
-> 文档编号：DFH-WS / HONEY-002
-> 产品：DFH Workstation
+> 文档编号：WP / HONEY-002
+> 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1

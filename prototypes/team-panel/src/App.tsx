@@ -1,5 +1,5 @@
 // ============================================================
-// App — DFH Workstation 团队管理面板
+// App — WhalePod 团队管理面板
 // 布局：TitleBar / NavRail / (列表栏 + 详情栏) / StatusBar
 // 视图：roster（团队成员+详情/对话）· board（Kanban+任务详情）· activity
 // 模态：Spawn / Shutdown / NewTask / CommandPalette

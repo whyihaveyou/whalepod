@@ -1,6 +1,6 @@
 // ============================================================
 // TitleBar — 顶部 40px 标题栏（wireframe §1）
-// 左：icon-mono + "DFH Workstation"；中：项目名 aionui2dsh；
+// 左：icon-mono + "WhalePod"；中：项目名 aionui2dsh；
 // 右：⌘K 搜索入口 + 设置
 // ============================================================
 
@@ -16,7 +16,7 @@ export function TitleBar({
     <header className="titlebar">
       <div className="titlebar-left">
         <img src="/icon-mono-light.svg" alt="" className="titlebar-logo" />
-        <span className="titlebar-brand">DFH Workstation</span>
+        <span className="titlebar-brand">WhalePod</span>
       </div>
       <div className="titlebar-mid">
         <span className="titlebar-project" title="团队面板原型">

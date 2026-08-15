@@ -1,7 +1,7 @@
 # @whalepod/honeycomb transport 层设计（API surface）
 
-> 文档编号：DFH-WS / HONEY-003
-> 产品：DFH Workstation
+> 文档编号：WP / HONEY-003
+> 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1（定稿）

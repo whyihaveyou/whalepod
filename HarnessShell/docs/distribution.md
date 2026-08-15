@@ -1,4 +1,4 @@
-# DFH Workstation — macOS 分发链路（HarnessShell.app 签名/公证/安装器）
+# 鲸群 WhalePod — macOS 分发链路（HarnessShell.app 签名/公证/安装器）
 
 > 作者：工程-Flash-1 | 适用对象：`/Users/qzp/aion2dsh/HarnessShell/`
 > 环境备注：**本机仅装有 Command Line Tools（无完整 Xcode）**。下方所有打包/签名命令均可用命令行完成；涉及公证（notarytool/stapler/altool）的步骤依赖 Xcode 组件，已在"无 Xcode 环境"下给出替代路径与可执行命令，脚本在装有 Xcode 的机器或 macOS CI 上可直接跑通。
@@ -25,14 +25,14 @@ HarnessShell/
 │   ├── ProcessManager.swift # 进程管理器（启停 harness）
 │   ├── ServiceConfig.swift
 │   ├── DeepLink.swift
-│   └── Info.plist           # 含 dsh:// URL scheme（占位符由 build-app.sh 解析）
+│   └── Info.plist           # 含 whale:// URL scheme（占位符由 build-app.sh 解析）
 ├── Resources/               # make-icns.sh 产出的 .icns
 ├── Scripts/
 │   ├── make-icns.sh  build-app.sh  make-dmg.sh  make-zip.sh  sign.sh  release.sh
 └── docs/distribution.md     # 本文档
 ```
 
-**App 事实**：Bundle ID `com.aion2dsh.HarnessShell`；可执行 `HarnessShell`；deploy target 13.0；注册 URL scheme `dsh`；单实例（同 Bundle ID 已有进程则转交并退出）；进程管理器拉起 harness web（见 ServiceConfig）。
+**App 事实**：Bundle ID `io.whalepod.desktop`；可执行 `HarnessShell`；deploy target 13.0；注册 URL scheme `whale`；单实例（同 Bundle ID 已有进程则转交并退出）；进程管理器拉起 harness web（见 ServiceConfig）。
 
 ---
 
@@ -45,7 +45,7 @@ HarnessShell/
 codesign --force --sign - --timestamp=none dist/HarnessShell.app
 codesign --verify --deep --strict --verbose=2 dist/HarnessShell.app
 # 预期输出: dist/HarnessShell.app: valid on disk / satisfies its Designated Requirement
-# Identifier=com.aion2dsh.HarnessShell, Signature=adhoc
+# Identifier=io.whalepod.desktop, Signature=adhoc
 ```
 
 - 一键：`Scripts/build-app.sh`（默认 `SIGN_IDENTITY=-` ad-hoc，已实测通过）。
@@ -93,7 +93,7 @@ SIGN_IDENTITY="Developer ID Application: 你的名字 (TEAMID)" Scripts/build-ap
 
 组装内容（脚本自动完成）：
 - `Contents/MacOS/HarnessShell`（swift build -c release 产物）
-- `Contents/Info.plist`（解析 `$(...)` 占位符；含 dsh:// scheme、CFBundleIconFile、deploy target）
+- `Contents/Info.plist`（解析 `$(...)` 占位符；含 whale:// scheme、CFBundleIconFile、deploy target）
 - `Contents/Resources/AppIcon.icns`（make-icns.sh 生成）
 - `Contents/_CodeSignature/`（签名嵌入）
 - 单实例守护在 `main.swift` 启动期执行
@@ -151,7 +151,7 @@ xcrun notarytool submit dist/HarnessShell.pkg \
 xcrun stapler staple dist/HarnessShell.pkg
 ```
 
-> **altool（旧工具，可选替代）**：老式流程也可用 `xcrun altool --notarize-app --file ... --primary-bundle-id com.aion2dsh.HarnessShell --username ... --password ...`；官方已迁移到 notarytool，新项目优先 notarytool。
+> **altool（旧工具，可选替代）**：老式流程也可用 `xcrun altool --notarize-app --file ... --primary-bundle-id io.whalepod.desktop --username ... --password ...`；官方已迁移到 notarytool，新项目优先 notarytool。
 
 ---
 
@@ -206,7 +206,7 @@ pkgbuild \
 |---|---|
 | swift build -c release | ✅ 89s，可执行 248K |
 | make-icns.sh（三枚 .icns） | ✅（AppIcon 788K / IconDarkTile 930K / IconMono 93K） |
-| build-app.sh（ad-hoc .app） | ✅ codesign verify 通过，dsh:// scheme 就位，无占位符残留 |
+| build-app.sh（ad-hoc .app） | ✅ codesign verify 通过，whale:// scheme 就位，无占位符残留 |
 | 启动冒烟（单实例） | ✅ 二次 open 进程数保持 1；Dock 恢复逻辑就位 |
 | make-dmg.sh | ✅ 1.2M，hdiutil verify 通过，内含 .app + Applications 软链 |
 | make-zip.sh | ✅ 808K |

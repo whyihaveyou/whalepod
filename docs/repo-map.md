@@ -1,6 +1,6 @@
 # deepseek-harness 仓库结构图与构建/运行说明
 
-> 本文档由【工程-Flash-1】在环境搭建任务中产出，服务于本项目 **DFH Workstation**（多智能体编排核心包暂定 `@whalepod/honeycomb`，NPM 名 `dsh-honeycomb`）的选型与二次开发参考。
+> 本文档由【工程-Flash-1】在环境搭建任务中产出，服务于本项目 **鲸群 WhalePod**（多智能体编排核心包暂定 `@whalepod/honeycomb`，NPM 名 `dsh-honeycomb`）的选型与二次开发参考。
 > 文档描述的是**本地实测**状态（2026-08-14 克隆验证）。
 
 ---
@@ -161,9 +161,9 @@ curl -sI http://localhost:3080        # 期望 HTTP 200
 
 ---
 
-## 4. 与本项目（DFH Workstation / @whalepod/honeycomb）的关联
+## 4. 与本项目（鲸群 WhalePod / @whalepod/honeycomb）的关联
 
-1. **架构范式可直接借鉴**：host/client 双面编译、Cordis 插件式装配（bundle = patch 层叠）、"seam = Service Definition + Provider + Consumer" 的可替换能力设计、append-only 会话事件日志作为模型上下文唯一来源 —— 这些与 DFH Workstation 多智能体编排的诉求高度吻合。
+1. **架构范式可直接借鉴**：host/client 双面编译、Cordis 插件式装配（bundle = patch 层叠）、"seam = Service Definition + Provider + Consumer" 的可替换能力设计、append-only 会话事件日志作为模型上下文唯一来源 —— 这些与 鲸群 WhalePod 多智能体编排的诉求高度吻合。
 2. **编排相关包是重点研究对象**：`subagent`（子智能体 seam，可换成"另一个产品内的委托 turn"）、`workflow`、`goal`、`plan`、`skill`、`agent-loop`（turn/step 循环、waterfall 事件）是 honeycomb 包设计时最直接的参考实现。
 3. **NPM 名规划**：官方包为 `@deepseek-ai/dsh-*` 命名空间；我们的核心包定为 `@whalepod/honeycomb`（NPM 名 `dsh-honeycomb`）时，注意与官方 `dsh` CLI 命名区分，避免抢占/混淆官方保留名。
 4. **运行依赖注意**：本仓库对 Node/pnpm 版本敏感（engines `^22.19.0`、packageManager 锁定 11.7.0），后续 CI/本地统一用 Corepack 锁定版本，避免环境漂移。

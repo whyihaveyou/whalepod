@@ -1,7 +1,7 @@
 # 外部 CLI Agent 连接器架构设计
 
-> 文档编号：DFH-WS / CONN-001
-> 产品：DFH Workstation
+> 文档编号：WP / CONN-001
+> 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`（NPM：`dsh-honeycomb`）
 > 责任人：架构-Pro-2
 > 状态：设计稿 v1
@@ -12,7 +12,7 @@
 
 ### 1.1 要解决的问题
 
-DFH Workstation 的多智能体编排核心（`@whalepod/honeycomb`）需要把"外部已安装的 CLI 编码代理"纳入同一个团队（team）中，让它们像原生 teammate 一样被编排、被对话、被分配任务。
+鲸群 WhalePod 的多智能体编排核心（`@whalepod/honeycomb`）需要把"外部已安装的 CLI 编码代理"纳入同一个团队（team）中，让它们像原生 teammate 一样被编排、被对话、被分配任务。
 
 本机常见的 CLI 代理包括：
 

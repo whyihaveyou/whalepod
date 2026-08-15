@@ -1,7 +1,7 @@
 # @whalepod/honeycomb 编排核心插件设计文档
 
-> 文档编号：DFH-WS / HONEY-001
-> 产品：DFH Workstation
+> 文档编号：WP / HONEY-001
+> 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`（NPM：`dsh-honeycomb`）
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1（概念级重实现）
@@ -11,7 +11,7 @@
 
 ## 0. 摘要
 
-`@whalepod/honeycomb` 是 DFH Workstation 的**多智能体编排核心插件**。它把「多个 agent 组成一个团队、leader 分派任务、agent 之间互通消息、按角色授权、空闲状态机调度、运行时孵化/遣散」这一套协作模型，**概念级重实现**在 DeepSeek Harness 的 Cordis 原语之上。
+`@whalepod/honeycomb` 是 鲸群 WhalePod 的**多智能体编排核心插件**。它把「多个 agent 组成一个团队、leader 分派任务、agent 之间互通消息、按角色授权、空闲状态机调度、运行时孵化/遣散」这一套协作模型，**概念级重实现**在 DeepSeek Harness 的 Cordis 原语之上。
 
 **核心原则：**
 

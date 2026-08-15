@@ -1,6 +1,6 @@
 # 团队面板 UI 原型（React + mock 数据版）
 
-DFH Workstation 团队管理面板的可运行前端原型。技术栈 **React 18 + Vite 5 + TypeScript**，严格按
+鲸群 WhalePod 团队管理面板的可运行前端原型。技术栈 **React 18 + Vite 5 + TypeScript**，严格按
 `design/` 下的统一设计 token（`design/tokens/tokens.css`）与组件规范（`design/components/`、`design/team-panel/`）实现。
 
 ## 快速开始

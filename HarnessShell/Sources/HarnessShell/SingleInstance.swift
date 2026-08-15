@@ -77,7 +77,7 @@ enum SingleInstance {
 
     /// 激活已存在的实例（聚焦所有窗口 / 激活应用）。
     private static func activateExistingInstance() {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.aion2dsh.HarnessShell"
+        let bundleID = Bundle.main.bundleIdentifier ?? "io.whalepod.desktop"
         let currentPID = ProcessInfo.processInfo.processIdentifier
         if let existing = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .first(where: { $0.processIdentifier != currentPID }) {

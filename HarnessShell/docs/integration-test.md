@@ -5,7 +5,7 @@
 >
 > 目的：桌面壳集齐全部能力（视觉 chrome + 打包 + 随机端口/单实例 + 崩溃重启/deep link）后，在联调阶段一次性验证这些能力**协同工作**、互不冲突，避免带着隐性缺陷进入下一轮。
 >
-> ⚠️ **重点关注**：`工程-Flash-2`（随机端口 `--port 0` + 端口解析喂 WKWebView + 单实例锁）与 `工程-Flash-3`（崩溃退避重启 + `dsh://` 深链）**都改了 `HarnessServiceManager.swift`**。联调时必须专门验证两者叠加无冲突——「`--port` 注入 + 端口解析」与「崩溃重启状态机」同时工作，且 **`resolvedPort` 在 restart 后仍正确**。
+> ⚠️ **重点关注**：`工程-Flash-2`（随机端口 `--port 0` + 端口解析喂 WKWebView + 单实例锁）与 `工程-Flash-3`（崩溃退避重启 + `whale://` 深链）**都改了 `HarnessServiceManager.swift`**。联调时必须专门验证两者叠加无冲突——「`--port` 注入 + 端口解析」与「崩溃重启状态机」同时工作，且 **`resolvedPort` 在 restart 后仍正确**。
 
 ---
 
@@ -18,7 +18,7 @@
 | 状态机 | `HarnessServiceManager.swift` | `State`：`stopped/starting/running/restarting(attempt,delay)/failed(msg)`；`onStateChange` 驱动 UI |
 | 崩溃重启 | 同上 `scheduleRestart()` | 指数退避 1s→2s→4s…封顶 30s；`maxConsecutiveCrashes=5` 超过则放弃转 `.failed`；`userRequestedStop=true` 时**不重启**（`poll()` 走 `.stopped`） |
 | 单实例 | `main.swift` + `SingleInstance.acquire()` | CFMessagePort 命名锁；同名实例已持锁 → 激活旧实例窗口并 `exit(0)`（AppDelegate 的 `applicationShouldHandleReopen` 聚焦） |
-| dsh:// 深链 | `DeepLink.swift` + `MainWindowController.handle(deepLink:)` + `AppDelegate` | 支持 `dsh://open?port=N`、`dsh://session/<id>`、其他→`unknown`；注入 `window.__DSH_BOOT__` + `__DSH_LAST_LINK__` + 派发 `dsh:deeplink`/`dsh-deeplink` 双事件；页面未加载完先缓存 `pendingDeepLink`，`didFinish` 补注 |
+| whale:// 深链 | `DeepLink.swift` + `MainWindowController.handle(deepLink:)` + `AppDelegate` | 支持 `whale://open?port=N`、`whale://session/<id>`、其他→`unknown`；注入 `window.__DSH_BOOT__` + `__DSH_LAST_LINK__` + 派发 `dsh:deeplink`/`dsh-deeplink` 双事件；页面未加载完先缓存 `pendingDeepLink`，`didFinish` 补注 |
 | 视觉 chrome | `MainWindowController.swift` `updateUI(state:)` | 状态点语义、呼吸动画、加载/未运行/错误三态覆盖层（`overlayView`） |
 | 打包/签名 | `Scripts/*.sh` + `docs/distribution.md` | ad-hoc/Developer ID + DMG/ZIP |
 
@@ -38,7 +38,7 @@ cd /Users/qzp/aion2dsh/HarnessShell
 Scripts/build-app.sh
 
 # 配置：自动端口模式（推荐，别名避免端口冲突）
-#   ~/.harness-shell/config.json:
+#   ~/Library/Application Support/WhalePod/config.json:
 #   { "command": "npm exec @deepseek-ai/dsh web",
 #     "workingDirectory": "/Users/qzp/aion2dsh/deepseek-harness",
 #     "host": "127.0.0.1", "port": 0 }
@@ -62,7 +62,7 @@ pkill -f "dsh web"; pgrep -fl "HarnessShell"; rm -f /tmp/dsh-port.txt
 | **T1** | 随机端口（`--port 0` + 端口解析喂 WebView） |
 | **T2** | 单实例锁（二次启动聚焦旧实例、进程数保持 1） |
 | **T3** | 崩溃退避重启（kill 子进程→自动拉起、指数退避、连续崩溃放弃、主动 stop 不重启） |
-| **T4** | dsh:// 深链（open?port=N / session 路由、已运行聚焦、冷启动路由） |
+| **T4** | whale:// 深链（open?port=N / session 路由、已运行聚焦、冷启动路由） |
 | **T5** | 视觉 chrome（暗色、状态点语义、加载/未运行/错误三态覆盖层） |
 | **T6** | 打包（ad-hoc 签名 + DMG/ZIP 安装、codesign verify、双击可开） |
 | **T7** | **叠加回归**（Flash-2 × Flash-3：随机端口 + 崩溃重启 + resolvedPort 在 restart 后正确）← 组长重点 |
@@ -154,46 +154,46 @@ pkill -f "dsh web"; pgrep -fl "HarnessShell"; rm -f /tmp/dsh-port.txt
 
 ---
 
-## T4 dsh:// 深链
+## T4 whale:// 深链
 
 ### T4.1 open?port=N（已运行的实例，指定端口加载）
-- **验证目标**：`dsh://open?port=3080` 在已运行时聚焦窗口并加载 3080 页面。
-- **手动部署**：先启动一个固定端口 3080 的 harness（或自动端口改 3080 场景）→ `open "dsh://open?port=3080"` → 窗口聚焦，WebView 指向 3080。
+- **验证目标**：`whale://open?port=3080` 在已运行时聚焦窗口并加载 3080 页面。
+- **手动部署**：先启动一个固定端口 3080 的 harness（或自动端口改 3080 场景）→ `open "whale://open?port=3080"` → 窗口聚焦，WebView 指向 3080。
 - **可脚本化**：
   ```bash
   open dist/HarnessShell.app && sleep 8
   # 先让服务跑在 3080（改 config.port=3080 或已外部起 3080）
-  open "dsh://open?port=3080"; sleep 3
+  open "whale://open?port=3080"; sleep 3
   curl -sI -m 5 http://127.0.0.1:3080 | head -1   # 期望 200（配合复验）
   ```
 - **通过判据**：窗口前置；WebView 显示 3080 的 UI。
 - **失败先查**：`DeepLink.parse`（host=open、port 解析）、`MainWindowController.handle(deepLink:)` 的 `.open(port)` 分支。
 
 ### T4.2 已运行聚焦（二次 `open` 深链只聚焦、不新起）
-- **验证目标**：同 T2.1 结合深链——已运行实例收到 `dsh://` 只聚焦旧窗口，进程数保持 1。
+- **验证目标**：同 T2.1 结合深链——已运行实例收到 `whale://` 只聚焦旧窗口，进程数保持 1。
 - **通过判据**：进程数 1；窗口前置。
 - **失败先查**：`AppDelegate.application(_:open urls:)` 是否仍经单实例锁路径。
 
 ### T4.3 ⚠️ 自动端口 × open?port=N 的叠加张力（重点）
-- **验证目标**：**自动端口模式下**（服务实际随机端口 ≠ 深链指定的 N）打开 `dsh://open?port=N`，行为是否符合预期（不崩溃、有合理降级/提示），以及是否"误指到不存在的端口"。
-- **手动步骤**：自动端口启动（config.port=0）→ 确认服务随机端口 R（日志可得）→ `open "dsh://open?port=3080"`（R≠3080）→ 观察：WebView 是跳 3080（可能空白/无法连接）还是仍留在 R。
+- **验证目标**：**自动端口模式下**（服务实际随机端口 ≠ 深链指定的 N）打开 `whale://open?port=N`，行为是否符合预期（不崩溃、有合理降级/提示），以及是否"误指到不存在的端口"。
+- **手动步骤**：自动端口启动（config.port=0）→ 确认服务随机端口 R（日志可得）→ `open "whale://open?port=3080"`（R≠3080）→ 观察：WebView 是跳 3080（可能空白/无法连接）还是仍留在 R。
 - **通过判据**：**明确记录并确认现状**——由于实现是 `.open(port)` 直接 load(port)，预期 WebView 会切到 3080。若该端口不存在则显示加载失败覆盖层。**判定为"符合当前设计意图 + 已知限制"**，若希望自动端口优先则需改 `handle` 逻辑（记录为本用例结论，联调对齐）。
 - **失败先查**：`MainWindowController.handle(deepLink:)` 的 `.open(port)` 直接 load 逻辑 vs `serviceManager.resolvedPort`。
 
 ### T4.4 session 路由
-- **验证目标**：`dsh://session/<id>` 交给 Web 端路由；`__DSH_BOOT__/__DSH_LAST_LINK__` + `dsh:deeplink`/`dsh-deeplink` 事件载荷正确。
-- **手动步骤**：`open "dsh://session/abc"` → Web 端应收到 `{type:"session", sessionId:"abc", href:..., ts:...}` 事件（可在 Web 控制台验证 `window.__DSH_BOOT__`）。
+- **验证目标**：`whale://session/<id>` 交给 Web 端路由；`__DSH_BOOT__/__DSH_LAST_LINK__` + `dsh:deeplink`/`dsh-deeplink` 事件载荷正确。
+- **手动步骤**：`open "whale://session/abc"` → Web 端应收到 `{type:"session", sessionId:"abc", href:..., ts:...}` 事件（可在 Web 控制台验证 `window.__DSH_BOOT__`）。
 - **可脚本化**（验证 Web 桥接产物不是 UI，但可抽查注入 JS 命中）：
   ```bash
-  open "dsh://session/s-123"
-  # 通过松弛观察：日志出现 "→ 深链 dsh://session/s-123"
+  open "whale://session/s-123"
+  # 通过松弛观察：日志出现 "→ 深链 whale://session/s-123"
   ```
 - **通过判据**：日志记录深链；Web 端能读到 `__DSH_LAST_LINK__`。
 - **失败先查**：`DeepLink.webPayload`、`bridgeDeepLinkToWeb` 的 JS 注入。
 
 ### T4.5 冷启动路由（页面未加载完成时收到深链 → didFinish 补注）
-- **验证目标**：服务/页面尚未 ready 时收到 `dsh://`，被缓存到 `pendingDeepLink`，待 `didFinish` 后补注完成路由。
-- **手动步骤**：冷启动 app（服务刚拉起）立刻 `open "dsh://open?port=..."` → 最终应路由成功。
+- **验证目标**：服务/页面尚未 ready 时收到 `whale://`，被缓存到 `pendingDeepLink`，待 `didFinish` 后补注完成路由。
+- **手动步骤**：冷启动 app（服务刚拉起）立刻 `open "whale://open?port=..."` → 最终应路由成功。
 - **通过判据**：日志 "→ 深链 …" 出现；WebView 最终加载到目标。
 - **失败先查**：`MainWindowController` 的 `pendingDeepLink` + `webView(_:didFinish:)` 补注分支。
 
@@ -224,7 +224,7 @@ pkill -f "dsh web"; pgrep -fl "HarnessShell"; rm -f /tmp/dsh-port.txt
   Scripts/build-app.sh
   codesign --verify --deep --strict --verbose=2 dist/HarnessShell.app
   codesign -dv dist/HarnessShell.app 2>&1 | grep -E "Identifier|Signature"
-  # 期望：valid on disk / Signature=adhoc / Identifier=com.aion2dsh.HarnessShell
+  # 期望：valid on disk / Signature=adhoc / Identifier=io.whalepod.desktop
   ```
 - **失败先查**：`Scripts/build-app.sh`、Info.plist 占位符解析是否残留。
 
@@ -272,7 +272,7 @@ pkill -f "dsh web"; pgrep -fl "HarnessShell"; rm -f /tmp/dsh-port.txt
 - **失败先查**：同 T7.1（固定模式下 `resolvedPort` 不置 nil）。
 
 ### T7.3 单实例锁 × 深链冷启动（组合）
-- **验证目标**：一个实例已跑，再 `open "dsh://..."` 仅聚焦不重复拉起；冷启动深链可达。
+- **验证目标**：一个实例已跑，再 `open "whale://..."` 仅聚焦不重复拉起；冷启动深链可达。
 - **通过判据**：进程数保持 1；深链最终路由成功。
 - **失败先查**：`main.swift` 单实例 + `AppDelegate` 深链入口 + `pendingDeepLink` 协同。
 
@@ -292,8 +292,8 @@ pkill -f "dsh web"; pgrep -fl "HarnessShell"; rm -f /tmp/dsh-port.txt
 Scripts/build-app.sh                     # 打包 ad-hoc .app
 open dist/HarnessShell.app               # 启动实例
 osascript -e 'quit app "HarnessShell"'   # 优雅退出
-open "dsh://open?port=3080"              # 深链 open
-open "dsh://session/s-123"               # 深链 session
+open "whale://open?port=3080"              # 深链 open
+open "whale://session/s-123"               # 深链 session
 pgrep -f "HarnessShell.app" | wc -l      # 进程数（单实例断言）
 pgrep -fl "dsh web"                      # harness 子进程
 lsof -nP -iTCP -sTCP:LISTEN | grep node  # 探测实际监听随机端口

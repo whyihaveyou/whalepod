@@ -13,7 +13,7 @@
 #
 # 环境变量（均可覆盖）：
 #   APP_NAME        应用名/可执行名       默认 HarnessShell
-#   BUNDLE_ID       Bundle Identifier     默认 com.aion2dsh.HarnessShell
+#   BUNDLE_ID       Bundle Identifier     默认 io.whalepod.desktop
 #   VERSION         CFBundleShortVersionString  默认 0.1.0
 #   BUILD_NUMBER    CFBundleVersion       默认 1
 #   DEPLOY_TARGET   LSMinimumSystemVersion 默认 13.0
@@ -29,7 +29,7 @@ cd "$ROOT"
 
 # ---- 可配置项 -------------------------------------------------------------
 APP_NAME="${APP_NAME:-HarnessShell}"
-BUNDLE_ID="${BUNDLE_ID:-com.aion2dsh.HarnessShell}"
+BUNDLE_ID="${BUNDLE_ID:-io.whalepod.desktop}"
 VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 DEPLOY_TARGET="${DEPLOY_TARGET:-13.0}"

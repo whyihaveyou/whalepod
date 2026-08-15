@@ -1,10 +1,10 @@
 import Foundation
 
-/// dsh:// URL scheme 深链。
+/// whale:// URL scheme 深链。
 ///
 /// 支持的格式：
-///   - `dsh://open?port=3080`        → 打开指定端口的 harness 实例
-///   - `dsh://session/<id>`          → 直接路由到某个 session
+///   - `whale://open?port=3080`        → 打开指定端口的 harness 实例
+///   - `whale://session/<id>`          → 直接路由到某个 session
 ///   - 其他格式解析失败时落入 `.unknown`，原样桥接给 Web 端处理
 struct DeepLink: Equatable {
     enum Action: Equatable {
@@ -20,9 +20,9 @@ struct DeepLink: Equatable {
 
     // MARK: 解析
 
-    /// 从 URL 解析深链；scheme 不是 dsh:// 时返回 nil（调用方忽略）。
+    /// 从 URL 解析深链；scheme 不是 whale:// 时返回 nil（调用方忽略）。
     static func parse(_ url: URL) -> DeepLink? {
-        guard let scheme = url.scheme?.lowercased(), scheme == "dsh" else { return nil }
+        guard let scheme = url.scheme?.lowercased(), scheme == "whale" else { return nil }
         let raw = url.absoluteString
         let action: Action
 
