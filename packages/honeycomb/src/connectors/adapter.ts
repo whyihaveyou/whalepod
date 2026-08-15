@@ -28,6 +28,16 @@ export interface AgentSession {
   send(input: SessionInput): Promise<void>
   /** Async iterable of normalized {@link SessionEvent}s. */
   readonly events: AsyncIterable<SessionEvent>
+  /**
+   * Abort the in-flight prompt turn if any. The session stays alive; the
+   * underlying agent should respond to the in-flight turn with a cancelled
+   * stopReason, after which a new {@link send} may be issued.
+   *
+   * Optional: adapters that don't support mid-turn abort (or that have no
+   * notion of "current turn") may omit this. Callers should feature-detect
+   * and fall back to {@link close}/{@link kill} when absent.
+   */
+  cancel?(): Promise<void>
   /** Gracefully close stdin and wait for the process to exit. */
   close(): Promise<void>
   /** Forcefully terminate the process. */

@@ -28,7 +28,7 @@ export interface AgentCapability {
  */
 export interface ProbeResult {
   /** Which detection layer produced this result. */
-  layer: 'path' | 'version' | 'config'
+  layer: 'path' | 'version' | 'config' | 'acp'
   /** Whether this layer matched. */
   matched: boolean
   /** Optional detail: resolved binary path, version string, or config dir. */
@@ -55,6 +55,14 @@ export interface AgentDescriptor {
   capabilities: AgentCapability[]
   /** Raw per-layer probe results for diagnostics and cache invalidation. */
   probe: ProbeResult[]
+  /**
+   * ACP capability advertisement. When set, the descriptor can be driven
+   * by the generic ACP adapter via `AcpAdapter.spawnSession`.
+   */
+  acp?: {
+    spawnArgs: string[]
+    capabilityProbe?: string[]
+  }
 }
 
 /**
@@ -85,6 +93,7 @@ export type SessionEvent =
   | { type: 'tool-call'; id: string; name: string; arguments: unknown }
   | { type: 'tool-result'; id: string; content: unknown }
   | { type: 'approval-request'; id: string; prompt: string }
+  | { type: 'cancelled' }
   | { type: 'done'; exitCode: number }
   | { type: 'error'; message: string }
 
@@ -111,4 +120,9 @@ export interface SpawnContext {
   cwd?: string
   /** Environment additions/overrides (filtered by the env whitelist). */
   env?: Record<string, string>
+  /**
+   * 可选：直接传一个 descriptor 来跳过内部 detect（用于测试或已知场景）。
+   * 缺省时 adapter 会跑一次 detect()。
+   */
+  descriptor?: AgentDescriptor
 }

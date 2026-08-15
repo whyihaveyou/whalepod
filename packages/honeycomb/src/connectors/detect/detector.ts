@@ -33,6 +33,18 @@ export interface DetectSpec {
   configDirName: string
   /** Version probe argv appended to the binary (defaults to `--version`). */
   versionArgs?: string[]
+  /**
+   * ACP (Agent Client Protocol) capability. When set, the detector will
+   * additionally probe `<binaryName> <spawnArgs>` to confirm the binary
+   * can be driven via the ACP generic adapter.
+   *  - `spawnArgs`: argv to enter ACP mode (e.g. `['acp']` for opencode).
+   *  - `capabilityProbe`: optional argv appended for an existence check
+   *    (e.g. `['--help']`); the probe runs synchronously and exits 0 ⇒ ok.
+   */
+  acp?: {
+    spawnArgs: string[]
+    capabilityProbe?: string[]
+  }
   /** Capabilities attached to a successful descriptor. */
   capabilities: AgentDescriptor['capabilities']
 }
@@ -118,6 +130,23 @@ export class Detector {
   }
 
   /**
+   * Layer 4 (optional) — ACP capability probe.
+   *
+   * When the {@link DetectSpec.acp} block is set, spawn
+   * `<binPath> <spawnArgs> <capabilityProbe?>` and treat exit-0 as evidence
+   * that the binary is ACP-capable. The resulting probe is appended to the
+   * `probe` array and the `acp` field is carried into the descriptor.
+   */
+  private probeAcp(binPath: string): ProbeResult {
+    if (!this.spec.acp) return { layer: 'acp', matched: false, detail: 'acp not advertised' }
+    const argv = [...this.spec.acp.spawnArgs, ...(this.spec.acp.capabilityProbe ?? [])]
+    const result = this.runVersion(binPath, argv)
+    return result.ok
+      ? { layer: 'acp', matched: true, detail: result.output?.split('\n')[0] ?? 'ok' }
+      : { layer: 'acp', matched: false, detail: result.output }
+  }
+
+  /**
    * Run all three layers and derive a descriptor.
    *
    * @param host - host environment snapshot (detached).
@@ -129,8 +158,12 @@ export class Detector {
       ? this.probeVersion(pathProbe.detail)
       : { layer: 'version' as const, matched: false, detail: undefined as string | undefined }
     const configProbe = this.probeConfig(host)
+    const acpProbe = pathProbe.matched && pathProbe.detail
+      ? this.probeAcp(pathProbe.detail)
+      : { layer: 'acp' as const, matched: false, detail: undefined as string | undefined }
 
     const probe: ProbeResult[] = [pathProbe, versionProbe, configProbe]
+    if (this.spec.acp) probe.push(acpProbe)
 
     const confidence: Confidence = pathProbe.matched
       ? 'binary'
@@ -141,7 +174,7 @@ export class Detector {
     // No layer matched — the agent is not installed.
     if (!pathProbe.matched && !configProbe.matched) return null
 
-    return {
+    const descriptor: AgentDescriptor = {
       id: this.spec.id,
       displayName: this.spec.displayName,
       kind: this.spec.kind,
@@ -152,5 +185,11 @@ export class Detector {
       capabilities: this.spec.capabilities,
       probe,
     }
+    // Only advertise ACP capability when the probe matched; otherwise the
+    // generic ACP adapter would refuse to spawn.
+    if (acpProbe.matched) {
+      descriptor.acp = { ...this.spec.acp! }
+    }
+    return descriptor
   }
 }
