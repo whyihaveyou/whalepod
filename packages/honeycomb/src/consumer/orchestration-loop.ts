@@ -281,9 +281,10 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     worker: LoopMember,
     attempt: number,
   ): Promise<void> {
-    // 清理句柄自身（setTimer 回调已触发）
-    dispatchWatchdogs.delete(task.id)
-    dispatchOwners.delete(task.id)
+    // 清理句柄自身。注意：默认 setTimer 是 setInterval（重复触发），必须显式
+    // clearTimer 撤销，否则到点后 interval 会持续泄漏——重派时会叠加多个 stale
+    // interval，用旧 owner/attempt 闭包二次误回收任务。disarm 内部已含 clearTimer。
+    disarmDispatchWatchdog(task.id)
 
     // 任务可能已被 report / sweepIdle 回收 —— 不再二次 failDispatch。
     const current = (await ledger.list(hiveId, { status: 'in-progress' })).find(
