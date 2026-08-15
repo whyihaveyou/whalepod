@@ -2,7 +2,7 @@
 
 > 文档编号：DFH-WS / CONN-001
 > 产品：DFH Workstation
-> 核心包：`@dfh/honeycomb`（NPM：`dsh-honeycomb`）
+> 核心包：`@whalepod/honeycomb`（NPM：`dsh-honeycomb`）
 > 责任人：架构-Pro-2
 > 状态：设计稿 v1
 
@@ -12,7 +12,7 @@
 
 ### 1.1 要解决的问题
 
-DFH Workstation 的多智能体编排核心（`@dfh/honeycomb`）需要把"外部已安装的 CLI 编码代理"纳入同一个团队（team）中，让它们像原生 teammate 一样被编排、被对话、被分配任务。
+DFH Workstation 的多智能体编排核心（`@whalepod/honeycomb`）需要把"外部已安装的 CLI 编码代理"纳入同一个团队（team）中，让它们像原生 teammate 一样被编排、被对话、被分配任务。
 
 本机常见的 CLI 代理包括：
 
@@ -28,7 +28,7 @@ DFH Workstation 的多智能体编排核心（`@dfh/honeycomb`）需要把"外�
 
 1. **自动识别（zero-config）**：启动编排核心时，自动扫描本机已安装的 CLI agent，无需用户手工登记。
 2. **统一抽象**：把异构的 CLI agent（不同 flags、不同流式输出、不同配置格式）包装成统一的 `Teammate` 模型。
-3. **概念级重实现**：不使用 AionUi 的类名 / API 名，全部以 `@dfh/honeycomb` 自身的命名体系表达，底层落到 DeepSeek Harness 的 Cordis 原语（service / events / lifecycle / config / persistence）。
+3. **概念级重实现**：不使用 AionUi 的类名 / API 名，全部以 `@whalepod/honeycomb` 自身的命名体系表达，底层落到 DeepSeek Harness 的 Cordis 原语（service / events / lifecycle / config / persistence）。
 
 ### 1.3 非目标
 
@@ -350,5 +350,5 @@ packages/honeycomb/src/connectors/
 ## 11. 后续衔接
 
 - 连接器-Pro 的「CLI 接口实测」输出（每个 agent 的 flags / 输出格式）将回填到各 `adapters/*` 的协议细节。
-- 编排-Pro 的 `@dfh/honeycomb` 插件设计决定本连接器以何种 service 形态挂载。
+- 编排-Pro 的 `@whalepod/honeycomb` 插件设计决定本连接器以何种 service 形态挂载。
 - 本设计中的 `TeammateDescriptor` 是连接器层与编排层的**唯一契约面**，后续接口变更需同步两篇文档。

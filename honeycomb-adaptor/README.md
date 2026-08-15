@@ -1,6 +1,6 @@
 # honeycomb-adaptor —— harness 真实可加载验证
 
-> 任务产出：把 `@dfh/honeycomb` 的 `apply(ctx)` 从「自造 shim 独立装配」推进到
+> 任务产出：把 `@whalepod/honeycomb` 的 `apply(ctx)` 从「自造 shim 独立装配」推进到
 > 「能被真实 deepseek-harness（cordis loader）加载」。
 > 完整原理见 `../docs/harness-plugin-integration.md`。
 

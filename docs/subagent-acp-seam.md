@@ -245,9 +245,9 @@ export function apply(ctx: Context, config: Config): void {
 
 ---
 
-## 4. ④ 与 `@dfh/honeycomb` 编排层对接的插入点
+## 4. ④ 与 `@whalepod/honeycomb` 编排层对接的插入点
 
-`@dfh/honeycomb` **不在本仓库**（全仓 grep 无命中），是外部命名空间（DeepSeek Honeycomb 产品的编排层）。deepseek-harness 为它预留的对接面如下：
+`@whalepod/honeycomb` **不在本仓库**（全仓 grep 无命中），是外部命名空间（DeepSeek Honeycomb 产品的编排层）。deepseek-harness 为它预留的对接面如下：
 
 ### 插入点 1 —— `ctx.subagents.registerProvider()`（主入口）
 Honeycomb 编排层把自己实现为一个 `SubagentProvider`，注册一个具名 provider（如 `name: 'honeycomb'`），即成为 harness 的一个标准 subagent 后端。一次性委派走 `start()`；长生命周期子 agent 走 `prepareContinuable()` + `startContinuable()`。

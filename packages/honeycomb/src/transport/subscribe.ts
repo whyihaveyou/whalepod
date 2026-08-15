@@ -9,7 +9,7 @@
  * - 连接可订阅具体 hiveId，或订阅 `"*"`（广播，收到所有事件）。
  * - 事件帧自带 `hiveId` 字段，前端据此二次过滤。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { Context, Disposable, Events } from '@deepseek-ai/cordis'

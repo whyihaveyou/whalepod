@@ -9,7 +9,7 @@
  * `mandate/decide` waterfall 由「归约」改为 cordis 的「continuation」形态——
  * 终端 `next` 返回输入 grant（默认策略已由 `defaultGrant` 应用）。
  *
- * @module @dfh/honeycomb/services/mandate
+ * @module @whalepod/honeycomb/services/mandate
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'

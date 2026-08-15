@@ -9,7 +9,7 @@
  * On the cordis migration the `declare module` target moved from the legacy
  * `./framework` shim to the real `@deepseek-ai/cordis` package.
  *
- * @module @dfh/honeycomb/events
+ * @module @whalepod/honeycomb/events
  */
 
 import type {

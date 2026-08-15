@@ -1,8 +1,8 @@
-# @dfh/honeycomb transport 层设计（API surface）
+# @whalepod/honeycomb transport 层设计（API surface）
 
 > 文档编号：DFH-WS / HONEY-003
 > 产品：DFH Workstation
-> 核心包：`@dfh/honeycomb`
+> 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1（定稿）
 > 前置文档：[honeycomb-orchestration-architecture.md](./honeycomb-orchestration-architecture.md)（服务接口 DTO 定义见其 §5/§6）、[honeycomb-orchestration-loop.md](./honeycomb-orchestration-loop.md)
@@ -302,7 +302,7 @@ packages/honeycomb/src/transport/
 
 1. **REST 端点**：按 §3 清单调用查询/变更，响应 `{ ok, data }` / `{ ok:false, error }`。
 2. **WS 事件流**：连接 `/ws`，发 `subscribe {hiveId}`，收 `event{topic,hiveId,payload}` 帧；事件 payload 结构 = `types.ts` 领域对象。
-3. **类型共享**：transport 复用 `@dfh/honeycomb/types` 的全部 DTO；前端可 `import type` 共享类型，无需自行定义第二套。
+3. **类型共享**：transport 复用 `@whalepod/honeycomb/types` 的全部 DTO；前端可 `import type` 共享类型，无需自行定义第二套。
 
 **本任务（架构-Pro-1）交付**：
 - 本文档（API surface 定稿）；

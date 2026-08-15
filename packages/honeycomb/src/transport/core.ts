@@ -5,7 +5,7 @@
  * REST 路由。内存版（memory.ts）与真实网络版（server.ts）都用本函数，避免三份
  * 重复的 service 解析 / 路由注册代码。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { Context } from '@deepseek-ai/cordis'

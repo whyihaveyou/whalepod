@@ -1,6 +1,6 @@
 # deepseek-harness 仓库结构图与构建/运行说明
 
-> 本文档由【工程-Flash-1】在环境搭建任务中产出，服务于本项目 **DFH Workstation**（多智能体编排核心包暂定 `@dfh/honeycomb`，NPM 名 `dsh-honeycomb`）的选型与二次开发参考。
+> 本文档由【工程-Flash-1】在环境搭建任务中产出，服务于本项目 **DFH Workstation**（多智能体编排核心包暂定 `@whalepod/honeycomb`，NPM 名 `dsh-honeycomb`）的选型与二次开发参考。
 > 文档描述的是**本地实测**状态（2026-08-14 克隆验证）。
 
 ---
@@ -77,7 +77,7 @@ deepseek-harness/                          # pnpm monorepo root
 | **双面架构** | `host` / `client` | 同一代码库编译为 **host 面**（Node 侧）与 **client 面**（浏览器侧）；`build:lib` 用 tsconfig.host/client 两套配置分别 tsc+tsdown 出产物 |
 | **LLM** | `llm` | 消息/流词汇表 + 适配器 seam（`ctx.llm`），厂商适配在此插拔 |
 | **能力 seam** | `tools` `fs` `subprocess` `shell` `terminal` `lsp` | 可替换能力：Service Definition / Provider / Consumer 三角；换 provider 即整体换能力（如指向远程沙箱） |
-| **编排** | `subagent` `workflow` `goal` `plan` `skill` `todo` `schedule` `jobs` | 子智能体、工作流、目标/计划、技能、待办、定时调度、后台任务 —— **与本项目 @dfh/honeycomb 最相关** |
+| **编排** | `subagent` `workflow` `goal` `plan` `skill` `todo` `schedule` `jobs` | 子智能体、工作流、目标/计划、技能、待办、定时调度、后台任务 —— **与本项目 @whalepod/honeycomb 最相关** |
 | **Profile 装配** | `bundle/*` | Cordis 补丁层：`base` / `headless` / `web-app`；`dsh --profile web` 即装载 `web-app` bundle（端口 3080 定义于其 `cordis.patch.yml`） |
 | **前端** | `apps/web`（dsh-web-frontend） | Vite + React UI，`build:web` 产物由 web profile 静态托管 |
 | **集成** | `mcp` `api` `acp` `sdk` | MCP 服务、HTTP API、Agent Client Protocol、SDK |
@@ -161,11 +161,11 @@ curl -sI http://localhost:3080        # 期望 HTTP 200
 
 ---
 
-## 4. 与本项目（DFH Workstation / @dfh/honeycomb）的关联
+## 4. 与本项目（DFH Workstation / @whalepod/honeycomb）的关联
 
 1. **架构范式可直接借鉴**：host/client 双面编译、Cordis 插件式装配（bundle = patch 层叠）、"seam = Service Definition + Provider + Consumer" 的可替换能力设计、append-only 会话事件日志作为模型上下文唯一来源 —— 这些与 DFH Workstation 多智能体编排的诉求高度吻合。
 2. **编排相关包是重点研究对象**：`subagent`（子智能体 seam，可换成"另一个产品内的委托 turn"）、`workflow`、`goal`、`plan`、`skill`、`agent-loop`（turn/step 循环、waterfall 事件）是 honeycomb 包设计时最直接的参考实现。
-3. **NPM 名规划**：官方包为 `@deepseek-ai/dsh-*` 命名空间；我们的核心包定为 `@dfh/honeycomb`（NPM 名 `dsh-honeycomb`）时，注意与官方 `dsh` CLI 命名区分，避免抢占/混淆官方保留名。
+3. **NPM 名规划**：官方包为 `@deepseek-ai/dsh-*` 命名空间；我们的核心包定为 `@whalepod/honeycomb`（NPM 名 `dsh-honeycomb`）时，注意与官方 `dsh` CLI 命名区分，避免抢占/混淆官方保留名。
 4. **运行依赖注意**：本仓库对 Node/pnpm 版本敏感（engines `^22.19.0`、packageManager 锁定 11.7.0），后续 CI/本地统一用 Corepack 锁定版本，避免环境漂移。
 
 ---

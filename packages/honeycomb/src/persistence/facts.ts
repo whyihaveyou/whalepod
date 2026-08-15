@@ -7,7 +7,7 @@
  * surface (`hive-updated` for `setMode`/`setSessionMode`, `member-renamed`
  * for `RosterService.rename`) — see the delivery notes in README.
  *
- * @module @dfh/honeycomb/persistence/facts
+ * @module @whalepod/honeycomb/persistence/facts
  */
 
 import type {

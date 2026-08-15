@@ -6,7 +6,7 @@
  * in order. Services never mutate snapshot state directly — they only append
  * facts.
  *
- * @module @dfh/honeycomb/persistence/store
+ * @module @whalepod/honeycomb/persistence/store
  */
 
 import { now } from '../util'

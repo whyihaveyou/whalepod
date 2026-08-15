@@ -4,7 +4,7 @@
  * 用进程内 fake ctx/roster/ledger（内存 Map + 事件总线）驱动循环，避免 boot
  * 整个插件；通过 `loop.onEvent` 断言内部转移事件序列，通过 fake 记录断言副作用。
  *
- * @module @dfh/honeycomb/consumer/orchestration-loop.test
+ * @module @whalepod/honeycomb/consumer/orchestration-loop.test
  */
 
 import { test } from 'node:test'

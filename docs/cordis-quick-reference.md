@@ -1,7 +1,7 @@
 # @deepseek-ai/cordis 框架速查表
 
 > 深研对象：`@deepseek-ai/cordis@4`（Shigma / Koishi 作者出品的 Cordis fork）+ `@deepseek-ai/cordis-plugin-loader` + deepseek-harness（dsh）的组装方式。
-> 本文为后续实现 `@dfh/honeycomb` 的前置参考。所有 API 均来自本地安装源码
+> 本文为后续实现 `@whalepod/honeycomb` 的前置参考。所有 API 均来自本地安装源码
 > `/Users/qzp/.dsh/profiles/node_modules/@deepseek-ai/cordis/src/*.ts`。
 
 ---

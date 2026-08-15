@@ -6,7 +6,7 @@
  * disposed` 在概念级实现里收敛为 `active` / `disposed` 两态；`ctx.effect` /
  * `ctx.onDispose` 关闭宿主上下文时统一回收所有 Fiber。
  *
- * @module @dfh/honeycomb/runtime/fiber
+ * @module @whalepod/honeycomb/runtime/fiber
  */
 
 import { makeId } from '../util'

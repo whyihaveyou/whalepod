@@ -1,8 +1,8 @@
-# @dfh/honeycomb 编排核心插件设计文档
+# @whalepod/honeycomb 编排核心插件设计文档
 
 > 文档编号：DFH-WS / HONEY-001
 > 产品：DFH Workstation
-> 核心包：`@dfh/honeycomb`（NPM：`dsh-honeycomb`）
+> 核心包：`@whalepod/honeycomb`（NPM：`dsh-honeycomb`）
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1（概念级重实现）
 > 依赖文档：[repo-map.md](./repo-map.md)、[connector-architecture.md](./connector-architecture.md)（连接器层唯一契约面）、[harness-feature-inventory.md](../harness-feature-inventory.md)
@@ -11,7 +11,7 @@
 
 ## 0. 摘要
 
-`@dfh/honeycomb` 是 DFH Workstation 的**多智能体编排核心插件**。它把「多个 agent 组成一个团队、leader 分派任务、agent 之间互通消息、按角色授权、空闲状态机调度、运行时孵化/遣散」这一套协作模型，**概念级重实现**在 DeepSeek Harness 的 Cordis 原语之上。
+`@whalepod/honeycomb` 是 DFH Workstation 的**多智能体编排核心插件**。它把「多个 agent 组成一个团队、leader 分派任务、agent 之间互通消息、按角色授权、空闲状态机调度、运行时孵化/遣散」这一套协作模型，**概念级重实现**在 DeepSeek Harness 的 Cordis 原语之上。
 
 **核心原则：**
 
@@ -590,7 +590,7 @@ interface HoneycombConfig {
 
 ```
 packages/honeycomb/
-  package.json                  # @dfh/honeycomb（NPM: dsh-honeycomb）
+  package.json                  # @whalepod/honeycomb（NPM: dsh-honeycomb）
   src/
     plugin.ts                   # apply(ctx, config)：装配 6 个服务
     config.ts                   # HoneycombConfig + StandardSchema

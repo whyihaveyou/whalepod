@@ -10,7 +10,7 @@
  * - 数据形态直接复用 `types.ts` 的 DTO，不新增第二套 JSON 结构；
  * - REST 路径词汇与 WS 订阅主题共享（hive/member/task/message/activity）。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { HiveEventMap } from '../events'

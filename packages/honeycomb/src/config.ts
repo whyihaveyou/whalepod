@@ -5,7 +5,7 @@
  * object is a structural `StandardSchemaV1`-compatible value so it can be
  * swapped for a real schemastery/standard-schema instance at integration time.
  *
- * @module @dfh/honeycomb/config
+ * @module @whalepod/honeycomb/config
  */
 
 import type { HiveWorkspaceMode } from './types'
@@ -132,7 +132,7 @@ export namespace StandardSchemaV1 {
 export const HoneycombConfigSchema: StandardSchemaV1<ResolvedHoneycombConfig> = {
   '~standard': {
     version: 1,
-    vendor: '@dfh/honeycomb',
+    vendor: '@whalepod/honeycomb',
     validate(value) {
       try {
         return { value: resolveHoneycombConfig(value as HoneycombConfig | undefined) }

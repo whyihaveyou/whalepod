@@ -61,7 +61,7 @@ src/
     └── global.css  # 全部组件样式，只引用 token 变量
 ```
 
-## 数据层抽象（接入真实 @dfh/honeycomb API）
+## 数据层抽象（接入真实 @whalepod/honeycomb API）
 
 组件**不感知 mock 实现**。所有数据访问都通过 `TeamApi` 接口（`src/services/api.ts`）：
 

@@ -5,7 +5,7 @@
  * service 的全部可暴露方法映射成 `GET/POST/PATCH/DELETE` 路由，并注册到
  * `HoneycombTransport`。不实现任何业务逻辑，只做参数搬运与结果包装。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { HoneycombTransport } from './port'

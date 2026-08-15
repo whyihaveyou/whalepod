@@ -4,7 +4,7 @@
  * 与 `client.ts` 分离：实现（REST + WS 状态机）在 client.ts，这里只声明
  * `createHoneycombClient` 返回的完整类型面，方便实现-Pro-3 直接 `import type`。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { HiveEventMap } from '../events'

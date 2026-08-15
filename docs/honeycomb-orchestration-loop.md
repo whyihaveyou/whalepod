@@ -1,8 +1,8 @@
-# @dfh/honeycomb 编排循环设计（consumer/orchestration-loop.ts 详解）
+# @whalepod/honeycomb 编排循环设计（consumer/orchestration-loop.ts 详解）
 
 > 文档编号：DFH-WS / HONEY-002
 > 产品：DFH Workstation
-> 核心包：`@dfh/honeycomb`
+> 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：设计稿 v1
 > 前置文档：[honeycomb-orchestration-architecture.md](./honeycomb-orchestration-architecture.md)（本文档所有类型/事件/服务引用其 §3/§5/§6/§7/§8）
@@ -12,7 +12,7 @@
 
 ## 0. 摘要
 
-编排循环（`OrchestrationLoop`）是 `@dfh/honeycomb` 里唯一的**主动调度者**：它订阅 hive 事件，把 `ledger` 里可执行的任务派给空闲的 worker，跟踪 worker 的交付与失败，并处理依赖阻塞与 idle 超时。
+编排循环（`OrchestrationLoop`）是 `@whalepod/honeycomb` 里唯一的**主动调度者**：它订阅 hive 事件，把 `ledger` 里可执行的任务派给空闲的 worker，跟踪 worker 的交付与失败，并处理依赖阻塞与 idle 超时。
 
 **三条核心决策：**
 

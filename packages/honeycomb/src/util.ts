@@ -1,12 +1,12 @@
 /**
- * Shared utilities for `@dfh/honeycomb`.
+ * Shared utilities for `@whalepod/honeycomb`.
  *
  * These were historically exported from the (now removed) `framework.ts`
  * Context shim. They are plain helpers — not Cordis primitives — so on the
  * cordis migration they move here so importing files do not depend on a
  * deleted module.
  *
- * @module @dfh/honeycomb/util
+ * @module @whalepod/honeycomb/util
  */
 
 let counter = 0

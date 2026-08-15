@@ -15,7 +15,7 @@
  * （subscribe/unsubscribe/hello）→ `SubscribeCenter.handleClientMessage`；
  * 事件桥接由 `SubscribeCenter.start()` 完成（推送按 hiveId 过滤）。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import { WebSocketServer, WebSocket } from 'ws'

@@ -10,7 +10,7 @@
  * `ctx.roster`；装配点构造它们即可（不再手动 `ctx.provide`）。定时器/订阅
  * 统一走 `ctx.effect`（含 transport 的 dispose）。
  *
- * @module @dfh/honeycomb/plugin
+ * @module @whalepod/honeycomb/plugin
  */
 
 import { type Context } from '@deepseek-ai/cordis'
@@ -70,7 +70,7 @@ async function startTransportServer(ctx: Context, resolved: ResolvedHoneycombCon
       () => () => {
         void server.close().catch(() => {})
       },
-      '@dfh/honeycomb/transport.dispose',
+      '@whalepod/honeycomb/transport.dispose',
     )
     console.log(
       `[honeycomb] transport listening on http://${server.host}:${server.port} (WS: /ws)`,

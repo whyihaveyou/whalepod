@@ -1,15 +1,15 @@
 // ============================================================
-// localHoneycombClient — @dfh/honeycomb transport 客户端的本地薄封装
+// localHoneycombClient — @whalepod/honeycomb transport 客户端的本地薄封装
 // ------------------------------------------------------------
 // 目的：team-panel 不在 workspace 里，尚无法 `import { createHoneycombClient }
-// from '@dfh/honeycomb/transport'`。这里按 实现-Pro-2 的客户端 SDK 形态
+// from '@whalepod/honeycomb/transport'`。这里按 实现-Pro-2 的客户端 SDK 形态
 // （src/transport/client-types.ts 的 HoneycombClient：hive/member/task/message/
 // mandate 五个 REST 域 + WS connect/subscribe/on/close）实现一个同构的本地
 // 回退，让手面的 service 层先能跑、接口签名与真实 SDK 完全一致。
 //
 // 切到真实 SDK（自动重连 + 重订阅 + 幂等 connect）时只需替换模块顶部 imports：
 // ```ts
-// // 换成：import { createHoneycombClient } from '@dfh/honeycomb/transport'
+// // 换成：import { createHoneycombClient } from '@whalepod/honeycomb/transport'
 // // 并把下方 createLocalHoneycombClient() 的调用点改成 createHoneycombClient(...)
 // ```
 // 业务层（honeycombApi.ts）不感知差异。

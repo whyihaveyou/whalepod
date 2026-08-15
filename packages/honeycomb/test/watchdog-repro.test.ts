@@ -17,7 +17,7 @@
  *
  * 运行：`pnpm tsx --test test/watchdog-repro.test.ts`
  *
- * @module @dfh/honeycomb/consumer/watchdog
+ * @module @whalepod/honeycomb/consumer/watchdog
  */
 
 import { test } from 'node:test'

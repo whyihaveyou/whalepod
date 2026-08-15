@@ -6,7 +6,7 @@
  * On the cordis migration the `declare module` target moved from the legacy
  * `./framework` shim to the real `@deepseek-ai/cordis` package.
  *
- * @module @dfh/honeycomb/context
+ * @module @whalepod/honeycomb/context
  */
 
 import type { HiveService } from './services/hive'

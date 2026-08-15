@@ -10,7 +10,7 @@
  * 经 `attachWs()` 挂接 WS 连接即可使用。真实的 Node http/ws 适配器在接入端
  * 实现 `HttpAdapter` / `WsAdapter` 端口并驱动本类。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { Context } from '@deepseek-ai/cordis'

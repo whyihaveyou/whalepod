@@ -15,7 +15,7 @@
  * `MemoryHttpAdapter.dispatch()`（自匹配），真实版经本类把真实 socket 请求翻译后
  * 复用同一 `dispatch()`。路由逻辑零重复。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import http from 'node:http'

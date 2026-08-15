@@ -1,8 +1,8 @@
 // ============================================================
-// honeycombApi — TeamApi 接口的真实实现（基于 @dfh/honeycomb 客户端）
+// honeycombApi — TeamApi 接口的真实实现（基于 @whalepod/honeycomb 客户端）
 // ------------------------------------------------------------
 // 走 transport 客户端（当前为同构薄封装 localHoneycombClient；架构-Pro-1
-// 复审 SDK 后，把模块顶部 import 换成真 SDK @dfh/honeycomb/transport 的
+// 复审 SDK 后，把模块顶部 import 换成真 SDK @whalepod/honeycomb/transport 的
 // createHoneycombClient 即可无缝接入，签名一致）。
 //
 // 映射：

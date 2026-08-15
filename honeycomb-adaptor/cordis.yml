@@ -1,6 +1,6 @@
 # honeycomb 主配置（可选；也可只放 patch，靠已有 profile 的子配置合并）
 
 - id: honeycomb
-  name: '@dfh/honeycomb'
+  name: '@whalepod/honeycomb'
   config:
     interval: 1000

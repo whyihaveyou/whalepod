@@ -4,7 +4,7 @@
  * 委托 `ctx.agents`（harness 装配的原生 agent runtime）孵化成员。本文件是
  * 桩：`ctx.agents` 未装配时抛错；装配后原样转发 {@link RuntimeHatchInput}。
  *
- * @module @dfh/honeycomb/runtime/native-runtime
+ * @module @whalepod/honeycomb/runtime/native-runtime
  */
 
 import type { Context } from '@deepseek-ai/cordis'

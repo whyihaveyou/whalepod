@@ -1,8 +1,8 @@
-# @dfh/honeycomb transport 真网络服务接入说明
+# @whalepod/honeycomb transport 真网络服务接入说明
 
 > 文档编号：DFH-WS / HONEY-006
 > 产品：DFH Workstation
-> 核心包：`@dfh/honeycomb`
+> 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
 > 状态：定稿（任务 #01a00107）
 > 前置契约：[honeycomb-transport-api.md](./honeycomb-transport-api.md)
@@ -34,7 +34,7 @@ packages/honeycomb/src/transport/
   (…types/port/router/subscribe/memory 为既有骨架)
 ```
 
-从包根直接导出：`import { createNodeTransportServer, NodeHttpAdapter, NodeWsAdapter } from '@dfh/honeycomb'`
+从包根直接导出：`import { createNodeTransportServer, NodeHttpAdapter, NodeWsAdapter } from '@whalepod/honeycomb'`
 
 依赖：`node:http` + `ws@^8`（WS 服务端必需，Node 核心只有客户端 WebSocket，无服务端能力）。
 
@@ -45,7 +45,7 @@ packages/honeycomb/src/transport/
 ### 2.1 直接调 API（推荐主进程/桌面壳用）
 
 ```ts
-import { Context, apply, createNodeTransportServer } from '@dfh/honeycomb'
+import { Context, apply, createNodeTransportServer } from '@whalepod/honeycomb'
 
 const ctx = new Context()
 await apply(ctx, { persistenceDir: '/path/to/hive-data' })
@@ -202,6 +202,6 @@ await ctx.dispose()            // 自动 close server（注册了 onDispose）
 
 - [ ] REST 基址 = `http://{host}:{port}`；端点/响应结构照 `honeycomb-transport-api.md §3`；
 - [ ] WS 地址 = `ws://{host}:{port}/ws`；订阅前先等 `subscribed` ack；
-- [ ] 共享类型：`import type` 复用 `@dfh/honeycomb` 的 `Hive/Task/Message/Member…` DTO，不另写一套 JSON 类型；
+- [ ] 共享类型：`import type` 复用 `@whalepod/honeycomb` 的 `Hive/Task/Message/Member…` DTO，不另写一套 JSON 类型；
 - [ ] 端口：开发期可用 `port: 0` 拿随机端口，或固定 `8765`；
 - [ ] 出错统一判断 `res.ok === false` 读 `res.error.code/message`。

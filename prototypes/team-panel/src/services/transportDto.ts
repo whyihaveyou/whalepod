@@ -1,13 +1,13 @@
 // ============================================================
-// transportDto — @dfh/honeycomb transport 契约的 DTO 类型镜像
+// transportDto — @whalepod/honeycomb transport 契约的 DTO 类型镜像
 // ------------------------------------------------------------
 // 依据：docs/honeycomb-transport-api.md（REST 端点 + WS schema）
 // 与 packages/honeycomb/src/types.ts 的 DTO/领域模型。
 //
-// 为什么本地镜像而不是 `import type from '@dfh/honeycomb'`：
-// prototypes/team-panel 目前不在 npm/pnpm workspace 里，`@dfh/honeycomb`
-// 包不可解析。等 实现-Pro-2 的客户端 SDK（@dfh/honeycomb 的可消费面）
-// 落地后，把这里的 `LocalHiveXxx` 换成 `import type { ... } from '@dfh/honeycomb'`
+// 为什么本地镜像而不是 `import type from '@whalepod/honeycomb'`：
+// prototypes/team-panel 目前不在 npm/pnpm workspace 里，`@whalepod/honeycomb`
+// 包不可解析。等 实现-Pro-2 的客户端 SDK（@whalepod/honeycomb 的可消费面）
+// 落地后，把这里的 `LocalHiveXxx` 换成 `import type { ... } from '@whalepod/honeycomb'`
 // 即可，字段名与取值完全对齐，无需改业务层。
 //
 // 本文件只声明类型，是 type-only 的，打包时会被擦除，不引入运行时依赖。

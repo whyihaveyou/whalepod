@@ -13,7 +13,7 @@
  * await server.close()
  * ```
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import { NodeHttpAdapter } from './http'

@@ -1,11 +1,11 @@
 /**
- * @dfh/honeycomb public entry.
+ * @whalepod/honeycomb public entry.
  *
  * Importing this module pulls in the `Events` / `Context` augmentations
  * (`events.ts`, `context.ts`) so `ctx.hive`, `ctx.emit('hive/created', ...)`
  * etc. type-check for consumers.
  *
- * @module @dfh/honeycomb
+ * @module @whalepod/honeycomb
  */
 
 import './context'

@@ -6,7 +6,7 @@
  *
  * 说明：
  *   - 真实 loader 会用 js-yaml 解析 + import 包；这里用 js-yaml 解析，
- *     name '@dfh/honeycomb' 映射到本地 adaptor 模块对象（等价 workspace:* 别名）。
+ *     name '@whalepod/honeycomb' 映射到本地 adaptor 模块对象（等价 workspace:* 别名）。
  *   - 验证三个目标：可 import 命中、apply 成功 + config 生效、事件可订阅、disposer 生效。
  */
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -42,7 +42,7 @@ async function main() {
 
   let mounted: any
   for (const e of entries) {
-    if (e.name === '@dfh/honeycomb') {
+    if (e.name === '@whalepod/honeycomb') {
       mounted = ctx.registry.plugin(
         { name: honeycombName, apply: honeycombApply },
         e.config ?? {},

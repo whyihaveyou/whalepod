@@ -4,7 +4,7 @@
  * Everything here is pure data — no framework imports — so the domain model
  * stays independent of the Cordis seam and is trivially unit-testable.
  *
- * @module @dfh/honeycomb/types
+ * @module @whalepod/honeycomb/types
  */
 
 // -- identifiers ------------------------------------------------------------

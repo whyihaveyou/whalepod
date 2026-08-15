@@ -10,7 +10,7 @@
  *
  * 本文件作为 transport 的对外装配命名空间，也导出端口类型供真实网络适配器实现。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 export { HoneycombTransport } from './port'

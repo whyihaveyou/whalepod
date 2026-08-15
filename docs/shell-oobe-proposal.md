@@ -104,7 +104,7 @@ dsh-desktop 与之不同：**完全自举 runtime**（Electron 内置 node + 打
 ## ⑤ 附加观察（记录为后续点子，非本任务实现）
 
 - **patch-package 手法**：dsh-desktop 用 `patches/*.patch` 在**不改上游**前提下给 harness 前端注入 OOBE/品牌/Provider Picker。我们可在 Swift 侧用 **WKUserScript 注入**实现等价的"不打 fork 的品牌/向导注入"，是一条低成本高价值的产品化路径。
-- **`.dshpreset` 预设包**（`docs/preset-packages.md`）：ZIP 内 `manifest.json` + `preset/`（agent.cordis.yml + skills/plugins），经 **loopback 导出/导入 API**（`DSH_WEB_URL/api/agent-preset.export|import`）原子交换预设、不混入 credentials/key/sessions。这与我们 `@dfh/honeycomb` 的 **hive/roster 配置导出**有强呼应——可参照其「导出不含敏感 + 导入两阶段校验 + 不改写既有 id」的契约设计 hive/roster 预设包。**记录为后续点子**，不进本任务。
+- **`.dshpreset` 预设包**（`docs/preset-packages.md`）：ZIP 内 `manifest.json` + `preset/`（agent.cordis.yml + skills/plugins），经 **loopback 导出/导入 API**（`DSH_WEB_URL/api/agent-preset.export|import`）原子交换预设、不混入 credentials/key/sessions。这与我们 `@whalepod/honeycomb` 的 **hive/roster 配置导出**有强呼应——可参照其「导出不含敏感 + 导入两阶段校验 + 不改写既有 id」的契约设计 hive/roster 预设包。**记录为后续点子**，不进本任务。
 
 ---
 

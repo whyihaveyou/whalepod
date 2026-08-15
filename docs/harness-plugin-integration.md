@@ -1,6 +1,6 @@
-# @dfh/honeycomb → deepseek-harness 插件真实接入说明
+# @whalepod/honeycomb → deepseek-harness 插件真实接入说明
 
-> 目标：把 `@dfh/honeycomb` 的 `apply(ctx, config)` 从「基于自造 shim 的独立装配」
+> 目标：把 `@whalepod/honeycomb` 的 `apply(ctx, config)` 从「基于自造 shim 的独立装配」
 > 推进到「能被真实 deepseek-harness 运行时（dsh-boot + dsh-loader）加载」。
 >
 > 事实来源：`/Users/qzp/aion2dsh/deepseek-harness/packages/**` 源码 +
@@ -56,9 +56,9 @@ await fiber.await()
 
 ### 1.3 Tharefore honeycomb 需要什么
 
-`@dfh/honeycomb` 包需满足：
+`@whalepod/honeycomb` 包需满足：
 1. **入口导出默认插件对象**（`.default` 或 `{ apply, name, inject }`）——cordis-plugin-loader 取 default。
-2. 若以包名 `name: '@dfh/honeycomb'` 被 cordis.yml 引用，loader 会自身份目录 `import('@dfh/honeycomb')`，
+2. 若以包名 `name: '@whalepod/honeycomb'` 被 cordis.yml 引用，loader 会自身份目录 `import('@whalepod/honeycomb')`，
    所以该包**必须能作为模块被 load**（有 `exports`/`main` 指向编译产物，且能 `import` 到 cordis）。
 3. `apply(ctx, config)` 里 `import { Context } from '@deepseek-ai/cordis'`——**与 harness 同源**。
 
@@ -121,7 +121,7 @@ harness 中**孵化一个 agent** 对应 honeycomb `RosterService.hatch`；监�
 ```yaml
 # 项目根 或 profile 主配置
 - id: honeycomb            # 全局唯一 id（patch 定位用）
-  name: '@dfh/honeycomb'   # 插件包名（loader import 解析用）
+  name: '@whalepod/honeycomb'   # 插件包名（loader import 解析用）
   config:                  # 传给 apply(ctx, config) 的第二参数
     defaultHiveMode: isolated
     defaultWorkspaceMode: relative
@@ -131,7 +131,7 @@ harness 中**孵化一个 agent** 对应 honeycomb `RosterService.hatch`；监�
 ```
 
 > 若 harness 从 `examples/` workspace 挂载，`name` 也可用相对路径（如 `./honeycomb.mjs`），
-> 或通过 `examples/package.json` 声明 `"@dfh/honeycomb": "workspace:*"` 用包名。
+> 或通过 `examples/package.json` 声明 `"@whalepod/honeycomb": "workspace:*"` 用包名。
 
 ### 3.2 patch 层 `cordis.patch.yml`
 
@@ -140,14 +140,14 @@ patch 用于**不碰主配置**地覆盖/插入/禁用 entry（多 profile 共�
 ```yaml
 # cordis.patch.yml
 - id: honeycomb            # 定位要覆盖的 entry
-  name: '@dfh/honeycomb'   # 可选：校验名字，防误覆盖
+  name: '@whalepod/honeycomb'   # 可选：校验名字，防误覆盖
   config:
     defaultHiveMode: flyingCoin   # 覆盖 config 字段
 
 # 追加一个新 entry（不覆盖已有主配置）
 - insert:
     - id: honeycomb-extra
-      name: '@dfh/honeycomb'
+      name: '@whalepod/honeycomb'
       config: {}
 ```
 
@@ -184,7 +184,7 @@ patch 用于**不碰主配置**地覆盖/插入/禁用 entry（多 profile 共�
 // honeycomb-adaptor/adaptor.ts —— 最小可加载插件（已通过真实 cordis 验证）
 import { Context } from '@deepseek-ai/cordis'
 
-export const name = '@dfh/honeycomb'           // cordis.yml name 引用
+export const name = '@whalepod/honeycomb'           // cordis.yml name 引用
 export const inject = ['agents']               // 声明依赖 harness 服务
 
 export function apply(ctx: Context, config: { interval?: number } = {}) {
@@ -214,7 +214,7 @@ export function apply(ctx: Context, config: { interval?: number } = {}) {
 # honeycomb-adaptor/cordis.patch.yml
 - insert:
     - id: honeycomb
-      name: '@dfh/honeycomb'
+      name: '@whalepod/honeycomb'
       config:
         interval: 1000
 ```
@@ -247,7 +247,7 @@ export function apply(ctx: Context, config: Config) {
 `honeycomb-adaptor/verify-load.ts`（直接 `ctx.registry.plugin` + 桩 agents）：
 
 ```
-[verify] plugin mounted: @dfh/honeycomb
+[verify] plugin mounted: @whalepod/honeycomb
 [verify] honeycomb/heartbeat {"liveAgents":2}   ×3
 [verify] ticks received = 3 (PASS)
 [verify] no ticks after dispose = PASS
@@ -286,14 +286,14 @@ cd /Users/qzp/aion2dsh/deepseek-harness
 # ② 准备一个 profile 目录，写两份文件
 mkdir -p profiles/hc && cat > profiles/hc/cordis.yml <<'EOF'
 - id: honeycomb
-  name: '@dfh/honeycomb'
+  name: '@whalepod/honeycomb'
   config:
     interval: 1000
 EOF
 cat > profiles/hc/cordis.patch.yml <<'EOF'
 - insert:
     - id: honeycomb-extra
-      name: '@dfh/honeycomb'
+      name: '@whalepod/honeycomb'
       config: {}
 EOF
 
@@ -309,7 +309,7 @@ node packages/boot/app-boot/bin/dsh-profile.mjs run web  # 实际命令以仓库
 
 ### 5.3 判定「加载成功」
 
-1. loader 无 `import`/`apply` 报错，日志出现 `apply · @dfh/honeycomb`。
+1. loader 无 `import`/`apply` 报错，日志出现 `apply · @whalepod/honeycomb`。
 2. `ctx.agents.list()` 随 agent 创建变化；自定义事件 `honeycomb/tick` 被监听方收到。
 3. config 能从 `cordis.patch.yml` 覆盖（改 `interval` 后热更新生效，fiber.update）。
 

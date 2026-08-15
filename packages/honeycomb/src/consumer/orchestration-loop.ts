@@ -17,7 +17,7 @@
  * 注意：本文件只依赖 `roster`/`ledger`/`courier`/`mandate` 的稳定接口，
  * 不触碰 `src/connectors/`（agent 会话由胶水层封装在 RuntimeHandle 后面）。
  *
- * @module @dfh/honeycomb/consumer/orchestration-loop
+ * @module @whalepod/honeycomb/consumer/orchestration-loop
  */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -18,7 +18,7 @@
  * AgentAdapter 的解析通过构造注入的 `resolveAdapter` 完成，避免把 honeycomb
  * 的 Context 与 connectors 的 Cordis 上下文耦合在一起。
  *
- * @module @dfh/honeycomb/runtime/agent-runtime
+ * @module @whalepod/honeycomb/runtime/agent-runtime
  */
 
 import type { Context } from '@deepseek-ai/cordis'

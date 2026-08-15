@@ -1,4 +1,4 @@
-# @dfh/honeycomb
+# @whalepod/honeycomb
 
 > 多智能体编排核心（Multi-Agent Orchestration Core）：把一组 agent 组织成「蜂群（Hive）」——蜂后（Queen）派工、工蜂（Worker）交付、名册（Roster）管成员、台账（Ledger）记任务、信使（Courier）传消息、权限（Mandate）控动作，全部状态以**事实日志（event sourcing）**落盘、可重放。
 >
@@ -24,7 +24,7 @@
 
 ## 一、定位
 
-`@dfh/honeycomb` 是一个**进程内可嵌入**的多智能体编排核心，三个关键词：
+`@whalepod/honeycomb` 是一个**进程内可嵌入**的多智能体编排核心，三个关键词：
 
 1. **蜂巢协作模型**：`Hive` 是基本协作单元（一个工作区 + 一名 queen + 若干 worker）。queen 通过 `ledger` 派工、worker 通过 `courier` 交付汇报，`roster` 管理成员生命周期（hatch / dismiss），`mandate` 做动作级授权。
 2. **事件溯源（event sourcing）**：一切状态变更以 `HiveFact` 追加写日志（默认 `~/.dfh/hive/<hiveId>/facts.ndjson`），进程重启后重放日志重建快照——无需迁移脚本，天然可审计、可重建。
@@ -110,7 +110,7 @@ pnpm install            # 或 npm install
 **嵌入最小示例**（进程内装配 5 个服务）：
 
 ```ts
-import { Context, apply } from '@dfh/honeycomb'
+import { Context, apply } from '@whalepod/honeycomb'
 
 const ctx = new Context()
 await apply(ctx, { persistenceDir: '.dfh/hive' })
@@ -140,7 +140,7 @@ await apply(ctx, {
 })
 
 // 方式 B：显式创建
-import { createNodeTransportServer } from '@dfh/honeycomb'
+import { createNodeTransportServer } from '@whalepod/honeycomb'
 const server = await createNodeTransportServer(ctx, { host: '127.0.0.1', port: 0 })
 console.log(`transport 就绪: http://${server.host}:${server.port}`)
 // 结束时: await server.close()
@@ -302,7 +302,7 @@ WS：`hello` / `subscribe {hiveId}` / `unsubscribe {hiveId}`；服务端 ack `su
 ### 6.7 client SDK 用法示例（`createHoneycombClient`，真实签名）
 
 ```ts
-import { createHoneycombClient } from '@dfh/honeycomb'
+import { createHoneycombClient } from '@whalepod/honeycomb'
 
 const client = createHoneycombClient({
   httpUrl: 'http://127.0.0.1:8787',
@@ -388,6 +388,6 @@ npm run example        # 活示例 = examples/hive-quickstart/index.ts（详见�
 | 编排循环（queen 派工） | ✅ 已实现（含看门狗） |
 | 连接器（外部 CLI agent 适配） | ✅ 已实现（opencode 实测过链路） |
 | **cordis 全量迁移**（framework shim → 真 `@deepseek-ai/cordis`） | 🔄 进行中（编排-Pro）——迁移后若公开 API 有变，本 README 由 实现-Pro-2 增量修订 |
-| 品牌收束（`@dfh/honeycomb` → `@whalepod/honeycomb`、鲸群 WhalePod 更名） | ⏳ 待执行（见任务板【品牌收束】） |
+| 品牌收束（`@whalepod/honeycomb` → `@whalepod/honeycomb`、鲸群 WhalePod 更名） | ⏳ 待执行（见任务板【品牌收束】） |
 
 文档基线：`2026-08-14`（以当前代码为准）。

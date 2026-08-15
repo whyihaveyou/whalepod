@@ -12,7 +12,7 @@
  */
 import { Context } from '@deepseek-ai/cordis'
 
-export const name = '@dfh/honeycomb'
+export const name = '@whalepod/honeycomb'
 export const inject = ['agents']
 
 export interface HoneycombConfig {

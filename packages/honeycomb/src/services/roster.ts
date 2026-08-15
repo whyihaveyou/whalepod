@@ -9,7 +9,7 @@
  * 'roster')` 自动注册 `ctx.roster`），公开接口与行为不变；`ctx.onDispose`
  * 映射为 `ctx.effect`。
  *
- * @module @dfh/honeycomb/services/roster
+ * @module @whalepod/honeycomb/services/roster
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
@@ -82,7 +82,7 @@ export class HoneycombRosterService extends Service implements RosterService {
   ) {
     super(ctx, 'roster')
     // 迁移：ctx.onDispose(() => void fibers.disposeAll()) → ctx.effect(disposer)
-    ctx.effect(() => () => void this.fibers.disposeAll(), '@dfh/honeycomb/roster.dispose')
+    ctx.effect(() => () => void this.fibers.disposeAll(), '@whalepod/honeycomb/roster.dispose')
   }
 
   async register(hiveId: HiveId, input: RegisterMemberInput): Promise<Member> {

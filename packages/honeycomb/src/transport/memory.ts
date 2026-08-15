@@ -13,7 +13,7 @@
  * `WsAdapter` 端口后调用 `HoneycombTransport.attachHttp / attachWs`，即可复用
  * 全部路由与订阅逻辑，无需改动 transport 核心。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { Context } from '@deepseek-ai/cordis'

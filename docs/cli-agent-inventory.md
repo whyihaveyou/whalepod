@@ -43,8 +43,9 @@
   - `--output-schema <json-schema>` 结构化输出约束
   - `-p/--profile`、`-c/--config`、`-i/--image`
 - **输出/流式格式**：`--json` 输出 NDJSON 事件流，事件类型包括 `thread.started` / `turn.started` / `item.completed` / `error`。`item.completed` 的 `item.type` 可为 `reasoning` / `tool_use` / `text`。`-o/--output-last-message` 仅取最终助手文本。
+- **prompt 通道（Task #01a0014b 确认）**：`codex exec --help` 明确 prompt 是 **[PROMPT] 位置参数（trailing argv）**，**不是 stdin**。`spawnArgs: ['exec','--json','--skip-git-repo-check']` + `send()` 把 prompt 拼到 argv 尾部 → `codex exec --json --skip-git-repo-check "<prompt>"`。`--skip-git-repo-check` 供在非 git 目录直接跑。
 - **后端**：默认走 ChatGPT 后端 `wss://chatgpt.com/backend-api/codex/responses`（OAuth token 认证，模型 `gpt-5.6-sol`）。
-- **实测结论**：CLI 可运行、JSONL 格式正确，但后端请求被 **403 Cloudflare 区域封锁**（当前网络未开代理/VPN），`exec` 挂起直至超时。**adapter 需内置代理支持，或本机配 VPN 后可用。**
+- **实测结论（updated）**：prompt 通道**协议正确、adapter 无需改动**；CLI 能 spawn 并打出 baseline 事件（`thread.started` / `turn.started` 在挂起前正常发出）。但后端请求被 **403 Cloudflare 区域封锁**（模型表刷新 "failed to refresh available models: timeout"），改提示词无法绕过 —— 记录为**已知边界**（本机未代理/VPN 时无法 headless 完成；网络/区域允许即可用，`test` 用例对后端边界 skip，不判红）。adapter 当前无需代理逻辑。
 
 ---
 
@@ -63,9 +64,10 @@
   - `-y/--yolo`（跳过权限确认）、`--auto`、`--plan`
   - `--skills-dir`、`--agent`、`--agent-file`、`--add-dir`
   - 子命令：`export`、`provider`、`acp`（ACP over stdio）、`web`、`login`、`doctor`、`vis`、`migrate`、`upgrade`
-- **输出/流式格式**：`--output-format stream-json` 输出 JSONL 事件流（NDJSON）；默认 `text` 为纯文本。流式事件含会话 id、消息增量、usage 等（未完整抓到，见实测）。
+- **输出/流式格式**：`--output-format stream-json` 输出 JSONL 事件流（NDJSON）；默认 `text` 为纯文本。
+- **prompt 通道（Task #01a0014b 确认并修正）**：kimi 的 prompt 是 **`-p` 的取值**，**不是 trailing 位置参数**。`spawnArgs: ['--output-format','stream-json','-p']` + `send()` 把 prompt 拼到 argv 尾部 → `kimi --output-format stream-json -p "<prompt>"`。（早前误把 `-p` 放 stream-json 前面会因 `-p` 吞掉下一个 token 而报 "unknown command 'stream-json'"，现已修正。）
 - **后端**：Moonshot ark / managed（api.kimi.com）。
-- **实测结论**：`--version` 正常；`kimi -p --output-format stream-json` 与 text 模式（ark 模型）均 **超时**，疑网络访问 ark 端点慢或被限。**adapter 需支持 stream-json 解析，且当前网络下 ark 模型不稳。**
+- **实测结论（updated）**：stream-json 通道**协议已修正并验证能 spawn**，正常 emit NDJSON meta 帧（`{"role":"meta","type":"system.version","content":0.34.0}`、`{"role":"meta","type":"turn.step.retrying",...}`）。但 ark 后端当前返回 **429 周额度用尽**（"You have exceeded the weekly usage quota. It will reset at 2026-08-17"），kimi 进入指数退避重试（~10 次、单次最多等 ~18s），单轮可能在数分钟后仍不完成 —— 记录为**已知边界**（额度 08-17 重置后即可 headless 完成；`test` 用例对额度边界 skip，不判红）。meta/retry 帧由 normalizer 正确丢弃（`role:"meta"` 无 text/tool 字段 → `null`），不会污染 `stream` 事件流。
 
 ---
 
@@ -166,9 +168,11 @@
 
 ---
 
-## 7. 真机端到端验证结果（Task #01a000f8）
+## 7. 真机端到端验证结果
 
-在 `packages/honeycomb` 真机跑通完整连接器链路，测试文件 `test/connector-live.test.ts`（4/4 绿）。
+### 7.1 连接器链路（Task #01a000f8，opencode 参考实现）
+
+在 `packages/honeycomb` 真机跑通完整连接器链路，测试文件 `test/connector-live.test.ts`。
 
 - **detect 四连 HIT**：
   | Adapter | version | config 命中 |
@@ -182,3 +186,19 @@
 - **env-filter 洗清嫌疑**：filtered env 下 opencode 照常 8.6s 通，慢/挂与白名单无关。
 - **根因修正**：`bridge/stdio-session.ts` — `deferSpawn` 模式 spawn 后 `child.stdin.end()`；`opencode.ts` — `spawnArgs` 加 `--pure`（跳过 MCP bootstrap 偶发阻塞）。
 - **启动耗时基线**：`--pure` 下 opencode `spawn→首个事件 ~8-9s`（LLM 本身 <1s，其余为进程+MCP-free 初始化）。openopde 直跑（full-env, TTY stdio）冷启动 ~11-16s 无 `--pure` 时因 MCP sciverse 拉取可能更久或偶发挂起。
+
+### 7.2 codex / kimi / hermes 真机验证（Task #01a0014b）
+
+对 codex、kimi、hermes 三个 adapter 做最小 prompt 真机验证，测试文件 `connector-live.test.ts` 扩展为 7 用例（4 基础 + hermes/codex/kimi 三名 live）。
+
+| Adapter | prompt 通道 | 真机结论 | 状态 |
+|---|---|---|---|
+| **hermes** | trailing argv（`-z "<prompt>"`） | ✅ **完整跑通**：`stream`(chunk="HELLO WORLD") → `done`，~10.4s；纯文本（无 NDJSON）。adapter 无需改动。 | ✅ 端到端可用 |
+| **codex** | trailing argv（`[PROMPT]` 位置参数） | ✅ 协议确认正确（`exec --help`）；能 spawn 并 emit baseline `thread.started`/`turn.started`。⚠️ ChatGPT 后端 **403 Cloudflare 区域封锁**（模型表刷新 timeout），headless 无法完成。 | ⚠️ 协议在案，后端边界 |
+| **kimi-code** | **`-p` 取值**（非 trailing 位置参数，已修正） | ✅ 修正后能 spawn 并 emit stream-json meta/retry 帧。⚠️ ark 后端 **429 周额度用尽**（08-17 重置）→ 指数退避重试数分钟仍不完成。 | ⚠️ 协议已修，额度边界 |
+
+- **hermes 细节**：`hermesNormalizer` 把纯文本行映射为 `stream` 增量，`exitCode=0` → `done`。当前唯一能端到端完成真机验证的第二个 agent（连同 opencode 两个）。
+- **codex 细节**：prompt 走 argv（非 stdin）再确认一次（早前基于 stderr "Reading additional input from stdin" 的错误 stdin 假设已撤销，`bridge` 仅保留 `stdin.end()` 于 `deferSpawn`）。后端 403 在本机（无代理）不可绕过，`exec --json` 挂起直至 timeout。
+- **kimi 细节**：早前 `spawnArgs` 误把 `-p` 放前面导致 `-p` 吞掉下一个 token 报 "unknown command 'stream-json'"，已修正为 `['--output-format','stream-json','-p']`。stream-json 的 `meta`/`turn.step.retrying` 帧被 normalizer 丢弃，不污染 `stream` 流。
+- **测试约定**：codex/kimi 的 live 用例对**后端边界 skip 不判红**（断言协议能 spawn + 出 baseline 事件/错误即通过，后端 403/429 挂起则 skip），hermes/opencode live 用例断言真实 `stream→done`。确保无后端配额/网络地区限制的主机可自动解锁为强断言。
+- **临时排查脚本已清理**：`scripts/_connector-live3.ts`、`scripts/_kimi-test.ts`、`scripts/_probe-kimi-codex.ts`、`/tmp/_*.ts` probes 全部删除。子进程核验干净（仅保留 hermes 既有守护进程 ~32xxx PIDs，非本次 spawn，未动）。

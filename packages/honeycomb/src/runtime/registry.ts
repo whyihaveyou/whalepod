@@ -5,7 +5,7 @@
  * 契约。原生 agent 与外部 CLI connector 都实现它，按 `id` 注册进
  * {@link RuntimeRegistry}，再由 `RosterService.hatch` 按 `backend` 取用。
  *
- * @module @dfh/honeycomb/runtime/registry
+ * @module @whalepod/honeycomb/runtime/registry
  */
 
 import type { Context } from '@deepseek-ai/cordis'

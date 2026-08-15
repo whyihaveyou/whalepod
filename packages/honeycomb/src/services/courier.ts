@@ -8,7 +8,7 @@
  * `courier/outgoing` waterfall 由「归约」改为 cordis 的「continuation」形态——
  * 无任何监听时终端 `next` 直接返回消息（等价于原默认行为）。
  *
- * @module @dfh/honeycomb/services/courier
+ * @module @whalepod/honeycomb/services/courier
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'

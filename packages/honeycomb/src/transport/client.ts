@@ -9,7 +9,7 @@
  * - close() 为永久性拆除：同一实例 close 后不再自动重连，如需复用请新建实例。
  * - 零三方运行时依赖：只用 `fetch` 与平台 `WebSocket`（均可注入，便于测试）。
  *
- * @module @dfh/honeycomb/transport
+ * @module @whalepod/honeycomb/transport
  */
 
 import type { HiveEventMap } from '../events'

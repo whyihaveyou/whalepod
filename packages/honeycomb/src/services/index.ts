@@ -1,7 +1,7 @@
 /**
  * Honeycomb services barrel (§5 / §6).
  *
- * @module @dfh/honeycomb/services
+ * @module @whalepod/honeycomb/services
  */
 
 export * from './hive'

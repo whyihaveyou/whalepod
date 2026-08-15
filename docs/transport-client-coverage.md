@@ -1,11 +1,17 @@
 # transport 客户端端点覆盖审计
 
-> 作者：架构-Pro-1（transport owner） · 状态：审计完成，覆盖已补进 `test/transport-client-live.test.ts`
+> 作者：架构-Pro-1（transport owner） · 状态：✅ **联调全绿（live 7/7 + transport 全回归 18/18）**
 > 依据：`docs/honeycomb-transport-api.md`（REST 全端点 + WS 帧清单） × `client.ts`（SDK 封装） × live 测试用例。
 
 ## 结论
 
-客户端 SDK `client.ts` 对 REST **31 个端点**与 WS **9 类事件 + 4 类帧**封装完整，无缺漏（方法名/参数/信封解包与服务端 router 一一对应，已在早前 review 逐项核对）。初版 live 测试仅覆盖 4 个方法，本审计后扩展为 **全端点点到点覆盖**。
+客户端 SDK `client.ts` 对 REST **31 个端点**与 WS **9 类事件 + 4 类帧**封装完整，无缺漏（方法名/参数/信封解包与服务端 router 一一对应）。live 测试已扩展为**全端点点到点覆盖**并在真 server × 真 client 上跑绿（`test/transport-client-live.test.ts` 7/7）。
+
+> 联调收口记录（2026-08-15，cordis 迁移绿后 live 首跑 3 过 4 挂，三次迭代收口——均为**测试期望与领域语义不匹配**，非服务端 bug）：
+> ① 用例3 `task.list({status:'pending'})` → TaskStatus 无 pending，新建任务为 backlog（ledger.ts）→ 改查 `backlog`；
+> ② 用例5 `mandate.assert` → 迁移后授权通过返回 `true`（`{ok:true,data:true}`）→ 断言改 `=== true`；
+> ③ 用例7 重连检测竞态：terminate 后立即 `connected` 仍为 true → 补 `waitReconnect()`（先等翻 false 再翻 true，覆盖补订门控）。
+> 服务端经架构-Pro-1 独立 repro 证实全程 200、无崩溃（`task.list` 返回空数组而非 crash）。
 
 ## 覆盖矩阵（端点 × client 方法 × live 用例）
 

@@ -14,7 +14,7 @@
  * reported via `onWarn` (default `console.warn`). A corrupt line never aborts
  * startup or replay.
  *
- * @module @dfh/honeycomb/persistence/jsonl
+ * @module @whalepod/honeycomb/persistence/jsonl
  */
 
 import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises'

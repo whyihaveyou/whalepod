@@ -7,7 +7,7 @@
  * 迁移到真实 cordis：工厂函数 → `Service` 子类（`super(ctx, 'hive')` 注册
  * `ctx.hive`），公开接口与行为不变。
  *
- * @module @dfh/honeycomb/services/hive
+ * @module @whalepod/honeycomb/services/hive
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'

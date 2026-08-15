@@ -2,7 +2,7 @@
 // MockApi — TeamApi 的 mock 实现
 // 模拟：网络延迟、spawn 异步上线、关机协商（批准/拒绝）、
 //       发送消息 → typing → agent 回复、状态推送。
-// 后续替换为真实 @dfh/honeycomb API 时，实现同一接口即可。
+// 后续替换为真实 @whalepod/honeycomb API 时，实现同一接口即可。
 // ============================================================
 
 import type {

@@ -6,7 +6,7 @@
  *
  * 迁移到真实 cordis：工厂函数 → `Service` 子类（`super(ctx, 'ledger')`）。
  *
- * @module @dfh/honeycomb/services/ledger
+ * @module @whalepod/honeycomb/services/ledger
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
