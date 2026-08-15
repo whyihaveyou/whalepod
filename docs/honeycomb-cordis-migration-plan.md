@@ -14,6 +14,15 @@
 
 ### 已完成（按执行序列）
 
+> **2026-08-15 原子合并已完成（commit b136915）**：
+> - `src/framework.ts` **已删除**（shim 全量弃用，全仓零残留 import）
+> - `src/consumer/orchestration-loop.ts`：`import type { Context }` 切换 `@deepseek-ai/cordis`；
+>   事件处理器参数（task/created、task/updated）改为结构类型 `{ task: { hiveId: string } }` 适配真 cordis
+>   Events 严格泛型（LoopTask.owner null vs Task.owner undefined 冲突）；**看门狗逻辑（dispatchTimeoutMs 等）未动**
+> - 验收门全绿：tsc 0 错 + persistence(5)/e2e-core/transport-http/transport-config/transport-client(7)/
+>   transport-client-live(7)/orchestration-loop(6)/watchdog-repro(4)/connector-live(7) + smoke/transport-smoke +
+>   hive-quickstart + honeycomb-adaptor verify-load/verify-loader（harness cordis loader 实载 PASS）
+
 | 项 | 文件 | 动作 |
 |---|---|---|
 | ✓ | `src/util.ts` | **新增**：从 framework.ts 摘出 `makeId` / `now`，5 个 service + persistence/store + runtime/fiber 改指 |
@@ -42,9 +51,8 @@
 
 ### 尚未完成（按定序序列等待）
 
-- `consumer/orchestration-loop.ts`：仍 `import type { Context } from '../framework'`（架构-Pro-2 看门狗在飞）。
-- `src/framework.ts`：**保留过渡**（选项 C 定序：等【释放确认 #2】consumer/ 冻结后，原子合并 = consumer import 切换 + 删 framework.ts + 全量回归）。
-- transport-client.test.ts 测试 7（HIGH-1/MED-5）存在**测试侧竞态 flake**（详见下）→ 待架构-Pro-1 加固。
+- ~~`src/framework.ts` 保留过渡~~ → **已删（b136915）**。原子合并完成，本任务 #01a00112 全量收口。
+- transport-client.test.ts 测试 7（HIGH-1/MED-5）存在**测试侧竞态 flake**（详见附录）→ 待架构-Pro-1 加固。
 
 ### 附录：transport-client.test.ts 测试 7 flake 证据（2026-08-15）
 
