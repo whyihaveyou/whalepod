@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 取消同 PR 上一次未完成的运行，避免重复消耗
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 默认权限：只读 + issues/comments 写
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # Job 1：honeycomb 包（pnpm install + typecheck + 全套确定性测试）
+  # runner：ubuntu-latest（免费、快速，纯 Node 测试无需 macOS）
+  # ============================================================================
+  honeycomb-tests:
+    name: Honeycomb tests (typecheck + smoke + 8 deterministic + 2 live skip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/honeycomb/package.json
+
+      - name: Install dependencies
+        working-directory: packages/honeycomb
+        # 不加 --frozen-lockfile：保证 lockfile 未提交时也能跑通；上线后建议改回
+        run: pnpm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: packages/honeycomb
+        run: pnpm run typecheck
+
+      - name: Run smoke
+        working-directory: packages/honeycomb
+        run: pnpm run test
+
+      - name: Run deterministic test suite (smoke + e2e + persistence + transport + orchestration + connector)
+        working-directory: packages/honeycomb
+        run: |
+          set -euo pipefail
+          # Node test runner 一次拉起所有 *.test.ts
+          # live 用例（transport-client-live / connector-live）自带 skip 逻辑：
+          #   - transport-client-live：需服务可达，CI 中无外部依赖会因 connect 失败自动 skip
+          #   - connector-live：opencode 未安装 → 内部 t.skip 命中（recorded+mock 部分仍跑）
+          node --import tsx --test \
+            test/persistence.test.ts \
+            test/e2e-core.test.ts \
+            test/transport-smoke.ts \
+            test/transport-config.test.ts \
+            test/transport-http.test.ts \
+            test/transport-client.test.ts \
+            test/transport-client-live.test.ts \
+            test/orchestration-loop.test.ts \
+            test/watchdog-repro.test.ts \
+            test/connector-live.test.ts
+
+      - name: Upload coverage & logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: honeycomb-test-logs
+          path: |
+            packages/honeycomb/**/*.log
+            packages/honeycomb/test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  # ============================================================================
+  # Job 2：HarnessShell Swift 壳构建（macOS only）
+  # runner：macos-14（Apple Silicon，免费档；SwiftPM 无外部依赖，可直接编）
+  # ============================================================================
+  harness-shell-build:
+    name: HarnessShell swift build (macOS arm64)
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Swift toolchain
+        run: |
+          swift --version
+          xcrun --show-sdk-path --sdk macosx
+
+      - name: Resolve SwiftPM dependencies (warm cache)
+        working-directory: HarnessShell
+        run: swift package resolve
+
+      - name: Build (release)
+        working-directory: HarnessShell
+        run: swift build -c release
+
+      - name: Build (debug, sanity)
+        working-directory: HarnessShell
+        run: swift build
+
+      - name: Upload .build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HarnessShell-build
+          path: |
+            HarnessShell/.build/release/HarnessShell
+            HarnessShell/.build/debug/HarnessShell
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HarnessShell-build-logs
+          path: |
+            HarnessShell/.build/**/*.log
+            ~/Library/Logs/DiagnosticReports/
+          if-no-files-found: ignore
+          retention-days: 3

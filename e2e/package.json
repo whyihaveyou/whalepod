@@ -1,0 +1,16 @@
+{
+  "name": "@whalepod/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "E2E 截图基线脚手架（playwright + 视觉回归）",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

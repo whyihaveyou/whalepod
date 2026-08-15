@@ -1,0 +1,133 @@
+name: Release
+
+# 手动档优先——cron 每日 20:00 自动发版是「老大」，CI release 只做 workflow_dispatch 触发。
+# 等打包链路（含 Developer ID + notarize）稳定后，再启用 tag 触发的正式 release。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0). 与现有 CHANGELOG.md [0.1.0] 段对齐。'
+        required: true
+        type: string
+      draft:
+        description: '是否作为 draft release（先发布再编辑）'
+        required: false
+        default: 'true'
+        type: boolean
+
+# 不取消同 tag 的运行——release 不能半截
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # 创建 GitHub Release 需要写权限
+
+jobs:
+  release:
+    name: Build macOS DMG + gh release upload
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需要完整 git log 给 changelog 用
+
+      - name: Show context
+        run: |
+          echo "tag = ${{ inputs.tag }}"
+          echo "draft = ${{ inputs.draft }}"
+          echo "ref = ${{ github.ref }}"
+          git log -1 --oneline || true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/honeycomb/package.json
+
+      - name: Install dependencies
+        working-directory: packages/honeycomb
+        run: pnpm install --no-audit --no-fund
+
+      - name: Build Swift shell (release)
+        working-directory: HarnessShell
+        run: swift build -c release
+
+      - name: Build .app bundle
+        working-directory: HarnessShell
+        run: ./Scripts/build-app.sh release
+
+      # ====================================================================
+      # 注意：build-runtime.sh 会从 nodejs.org 下载 node tarball + 从 npm
+      # registry 拉 dsh 全家桶。在 CI runner 里走默认网络即可，不需代理。
+      # ====================================================================
+      - name: M0 bundled runtime (node + dsh)
+        working-directory: HarnessShell
+        run: ./Scripts/build-runtime.sh
+
+      # ====================================================================
+      # 签名档位：默认 ad-hoc（CI runner 无 Apple Developer 证书）。
+      # 真实发版改用 sign.sh prod 档（需 DEVELOPER_ID / AC_PASSWORD secret）。
+      # ====================================================================
+      - name: Sign .app (ad-hoc)
+        run: |
+          codesign --force --deep -s - HarnessShell/dist/HarnessShell.app
+          codesign --verify --verbose HarnessShell/dist/HarnessShell.app
+
+      - name: Package DMG
+        working-directory: HarnessShell
+        run: ./Scripts/make-dmg.sh
+
+      - name: Package ZIP (parallel for fast download)
+        working-directory: HarnessShell
+        run: ./Scripts/make-zip.sh
+
+      - name: Compute SHA256
+        run: |
+          cd HarnessShell/dist
+          shasum -a 256 *.dmg *.zip 2>/dev/null | tee SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          gh release create "$TAG" \
+            --title "WhalePod $TAG" \
+            --notes-file <(awk '/^## \[0\.1\.0\]/,/^## \[/' CHANGELOG.md | sed '$d') \
+            --draft="$DRAFT" \
+            HarnessShell/dist/*.dmg \
+            HarnessShell/dist/*.zip \
+            HarnessShell/dist/SHA256SUMS
+
+      - name: Upload artifacts for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.tag }}-artifacts
+          path: |
+            HarnessShell/dist/*.dmg
+            HarnessShell/dist/*.zip
+            HarnessShell/dist/SHA256SUMS
+          retention-days: 14
+
+# ----------------------------------------------------------------------------
+# TODO(未来)：tag 触发的正式 release
+#
+# on:
+#   push:
+#     tags: ['v*.*.*']
+#
+# 与现有 cron (每日 20:00) 并存：cron 是老大，CI release 是快速通道。
+# 触发前确保 tag 与 CHANGELOG 已人工校对（cron 任务里也有这一步）。
+# ----------------------------------------------------------------------------

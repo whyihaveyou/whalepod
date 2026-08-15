@@ -59,3 +59,9 @@ repro-real-live.test.ts
 *.keystore
 secrets/
 .credentials/
+
+# E2E 视觉回归制品（基线 PNG 入库，失败制品不入库）
+e2e/test-results/
+e2e/playwright-report/
+e2e/**/test-results/
+e2e/**/playwright-report/

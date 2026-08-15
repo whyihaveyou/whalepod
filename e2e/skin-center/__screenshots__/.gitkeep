@@ -1,0 +1,10 @@
+# 截图基线目录（Playwright 自动维护）
+#
+# 首次跑通后会出现：
+#   team-panel-dark-chromium.png
+#   team-panel-light-chromium.png
+#   task-card-hover-chromium.png
+#
+# 这些 PNG 入库（git 跟踪）—— 任何像素级改动都会让 CI 红。
+# 更新基线：
+#   cd e2e && pnpm test:update

@@ -1,5 +1,9 @@
 # 鲸群 WhalePod
 
+[![CI](https://github.com/whyihaveyou/whalepod/actions/workflows/ci.yml/badge.svg)](https://github.com/whyihaveyou/whalepod/actions/workflows/ci.yml)
+[![Release](https://github.com/whyihaveyou/whalepod/actions/workflows/release.yml/badge.svg)](https://github.com/whyihaveyou/whalepod/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 > **A Pod of Agents, Powered by DeepSeek Harness**
 
 鲸群（WhalePod）是一个面向 macOS / 后续跨平台的桌面工作站，基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建并致谢。围绕 Harness 的多智能体编排核心，我们独立设计并实现了名为 **蜂巢（Honeycomb）** 的 `@whalepod/honeycomb` 编排框架——它把 leader/worker 角色、roster 注册表、任务板、消息总线、spawn/shutdown 生命周期等概念映射到 Cordis 原语（service / events / lifecycle / config / persistence），是一份**概念级的重实现**，不包含任何 AionUi 代码。
