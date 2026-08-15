@@ -43,7 +43,8 @@ jobs:
       - name: Install dependencies
         working-directory: packages/honeycomb
         # 不加 --frozen-lockfile：保证 lockfile 未提交时也能跑通；上线后建议改回
-        run: pnpm install --no-audit --no-fund
+        # pnpm 9 无 --no-audit/--no-fund CLI 旗标（npm 风格）,audit/fund 走 config 键
+        run: pnpm install
 
       - name: Typecheck
         working-directory: packages/honeycomb
