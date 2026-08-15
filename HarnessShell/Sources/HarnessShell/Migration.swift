@@ -53,7 +53,7 @@ enum Migration {
         let entry = "\(ISO8601DateFormatter().string(from: Date())) \(line)\n"
         if let handle = try? FileHandle(forWritingTo: DataRoot.migrationLogURL) {
             defer { try? handle.close() }
-            try? handle.seekToEndOfFile()
+            handle.seekToEndOfFile()
             try? handle.write(contentsOf: Data(entry.utf8))
         } else {
             try entry.write(to: DataRoot.migrationLogURL, atomically: true, encoding: .utf8)
