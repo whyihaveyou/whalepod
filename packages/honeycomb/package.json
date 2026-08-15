@@ -21,7 +21,8 @@
     "test": "tsx test/smoke.ts",
     "test:persistence": "tsx --test test/persistence.test.ts",
     "test:e2e": "tsx --test test/e2e-core.test.ts",
-    "example": "tsx examples/hive-quickstart/index.ts"
+    "example": "tsx examples/hive-quickstart/index.ts",
+    "dev-server": "tsx scripts/dev-server.ts"
   },
   "keywords": [
     "honeycomb",

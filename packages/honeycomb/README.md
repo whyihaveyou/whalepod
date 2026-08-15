@@ -157,14 +157,14 @@ cd packages/honeycomb
 npm run example        # 或按 examples/hive-quickstart/README.md 的指引
 ```
 
-- 默认走**真编排循环**（`consumer/orchestration-loop.ts`）；若需要保留 mock 驱动作为备选演示，README 内有切换说明；
+- 当前示例默认走 **mock 驱动**（把「建 hive → 孵化 → 建任务 → 派工 → 交付 → courier 消息 → 落盘恢复」显式演出来，确定、可读）；想切到真实的 `consumer/orchestration-loop.ts` 事件驱动循环，见 examples/hive-quickstart/README.md「切到真编排循环」一节（含模板代码 + 两处已知阻塞 bug 说明，需循环 owner 先修，任务边界不改 src/）；
 - 想改行为参数（如 `idleTimeoutMs`、runtimes），见 §6.5 `HoneycombConfig` 字段表。
 
 ---
 
 ## 六、API 参考
 
-> transport 端点的**完整契约**（31 个 REST 端点清单、WS 消息 schema、错误码）见 **`docs/honeycomb-transport-api.md`**（权威文档，本 README 只做摘要与 SDK 用法，不重复）。事件主题清单见 §6.4。
+> transport 端点的**完整契约**（31 个 REST 端点清单、WS 消息 schema、错误码）见 **`../../docs/honeycomb-transport-api.md`**（仓库根 `docs/` 下的权威文档，本 README 只做摘要与 SDK 用法，不重复）。事件主题清单见 §6.4。
 
 ### 6.1 入口与装配
 
@@ -285,7 +285,7 @@ WS 推送主题与进程内事件表**同一套**（`subscribe.ts` 的 `PUSHED_T
 | `transport.host` | `string` | `'127.0.0.1'` | 监听地址 |
 | `transport.port` | `number` | `8765` | 监听端口（config 默认 8765；`0` = 随机可用） |
 
-### 6.6 transport 端点摘要（完整契约见 `docs/honeycomb-transport-api.md`）
+### 6.6 transport 端点摘要（完整契约见 `../../docs/honeycomb-transport-api.md`）
 
 REST 共 **31 个端点**，按域划分（wire 信封统一为 `{ status, body: { ok:true, data } | { ok:false, error:{ code, message } } }`；JSON query 参数如 `filter/cursor/scope` 为**单次 URLSearchParams 编码**）：
 
@@ -375,7 +375,7 @@ npx tsx test/smoke.ts                        # 传输层 smoke（REST 信封 + W
 npx tsx --test test/transport-client.test.ts # client SDK 7 用例：方法映射/错误解包/重连补订/ack-before-ready/WS_UNAVAILABLE
 npx tsx --test test/persistence.test.ts      # 事实日志落盘 + 重放 + 损坏容忍
 npx tsx --test test/e2e-core.test.ts         # 核心端到端（services×persistence×events）
-npx tsx test/examples/hive-quickstart        # 或按 examples/hive-quickstart 指引
+npm run example        # 活示例 = examples/hive-quickstart/index.ts（详见其 README）
 ```
 
 ---

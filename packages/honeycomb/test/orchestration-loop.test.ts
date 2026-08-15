@@ -11,6 +11,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   createOrchestrationLoop,
+  DEFAULT_DISPATCH_TIMEOUT_MS,
   DEFAULT_MAX_DISPATCH_ATTEMPTS,
   type LoopEvent,
   type LoopMember,
@@ -89,8 +90,9 @@ interface Fixture {
   loop: OrchestrationLoop
   events: LoopEvent[]
   applyCalls: Array<{ taskId: string; status?: string; owner?: string | null }>
-  /** 捕获 idle 扫描回调的 fake timer（可手动触发 sweepIdle）。 */
-  sweep: (() => void) | null
+  /** 按 ms 触发对应定时器回调（区分 idle sweep 与 dispatch watchdog）。
+   *  无 ms 入参时，按 ms 取最小 key（即最先注册的 idle sweep）。 */
+  sweep: (ms?: number) => void
   /** 可推进的假时钟。 */
   clock: { t: number }
 }
@@ -101,7 +103,8 @@ function boot(opts: { idleTimeoutMs?: number } = {}): Fixture {
   const ledger = new FakeLedger()
   const events: LoopEvent[] = []
   const applyCalls: Fixture['applyCalls'] = []
-  let sweep: (() => void) | null = null
+  // 用 ms 分桶，避免 dispatch watchdog 覆盖 idle sweep 的回调句柄
+  const cbsByMs = new Map<number, () => void>()
   const clock = { t: 0 }
 
   const deps: OrchestrationLoopDeps = {
@@ -119,19 +122,39 @@ function boot(opts: { idleTimeoutMs?: number } = {}): Fixture {
     config: {
       idleTimeoutMs: opts.idleTimeoutMs ?? 0,
       maxDispatchAttempts: DEFAULT_MAX_DISPATCH_ATTEMPTS,
+      dispatchTimeoutMs: DEFAULT_DISPATCH_TIMEOUT_MS,
     },
     now: () => clock.t,
-    setTimer: (cb) => {
-      sweep = cb
-      return 0
+    setTimer: (cb, ms) => {
+      cbsByMs.set(ms, cb)
+      return ms
     },
-    clearTimer: () => {},
+    clearTimer: (h) => {
+      cbsByMs.delete(h as number)
+    },
   }
 
   const loop = createOrchestrationLoop(deps)
   loop.onEvent((e) => events.push(e))
   loop.start(['h1'])
-  return { ctx, roster, ledger, loop, events, applyCalls, sweep: () => sweep?.(), clock }
+  return {
+    ctx,
+    roster,
+    ledger,
+    loop,
+    events,
+    applyCalls,
+    sweep: (ms?: number) => {
+      if (ms !== undefined) {
+        cbsByMs.get(ms)?.()
+        return
+      }
+      // 默认触发最小 ms（即最先注册的：idle sweep）
+      const sorted = Array.from(cbsByMs.keys()).sort((a, b) => a - b)
+      sorted[0] !== undefined && cbsByMs.get(sorted[0])?.()
+    },
+    clock,
+  }
 }
 
 /** 注册一个 worker；`online=true` 使其 sendTo 成功。 */
@@ -249,7 +272,7 @@ test('idle 超时 dismiss：空闲 worker 超时后被移出名册并回滚未�
 
   // 时间推进超过 idleTimeoutMs，且 w1 再无活跃 → sweep 应 dismiss
   f.clock.t += 10_000
-  f.sweep!()
+  f.sweep()
   await flush()
 
   assert.equal(f.roster.members.find((m) => m.id === 'w1'), undefined, '空闲超时后应被 dismiss')

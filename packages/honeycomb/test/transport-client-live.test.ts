@@ -63,6 +63,21 @@ function nextEvent(topic: string, timeoutMs = 5000): Promise<any> {
   })
 }
 
+/**
+ * 等待一次「断线→重连补订」完整循环：
+ *  1) connected 先翻 false（客户端观察到 socket 断开）——terminate 后 immediately 轮询可能仍为 true，必须等它先掉；
+ *  2) 再翻 true（自动重连 + 逐个补订 ack 完成，connected=OPEN && ready）。
+ * 避免 terminate 后 connected 仍为 true 时直接触发事件、而订阅尚在死连接上导致事件丢失的竞态。
+ */
+async function waitReconnect(timeoutMs = 8000): Promise<void> {
+  const t0 = Date.now()
+  while (client.connected) {
+    if (Date.now() - t0 > timeoutMs) throw new Error('did not observe WS disconnect')
+    await new Promise((r) => setTimeout(r, 20))
+  }
+  await waitFor(() => client.connected, timeoutMs)
+}
+
 test('REST hive 全端点', async () => {
   const hive = await client.hive.create({ name: 'live-hive', workspace: '/tmp/live' })
   assert.equal(typeof hive.id, 'string')
@@ -135,7 +150,7 @@ test('REST task 全端点', async () => {
   const getT = await client.task.get(hiveId, t1.id)
   assert.equal(getT.id, t1.id)
 
-  const listT = await client.task.list(hiveId, { status: 'pending' as any })
+  const listT = await client.task.list(hiveId, { status: 'backlog' as any }) // 新建任务初始状态是 backlog
   assert.ok(listT.some((x: { id: string }) => x.id === t1.id))
 
   const upd = await client.task.update(hiveId, t1.id, { description: 'desc' })
@@ -186,12 +201,12 @@ test('REST mandate 全端点', async () => {
   const w = await client.member.register(hiveId, { name: 'mw2', role: 'worker' as any, backend: 'native' })
   const wid = w.id
 
-  // can → boolean；assert → 授权时 resolve(undefined)（deny 会抛 fail 信封）
+  // can → boolean；assert → 授权时 resolve(true)（deny 会抛 fail 信封）
   const can = await client.mandate.can(wid, 'courier.send' as any, { hiveId })
   assert.equal(typeof can, 'boolean')
 
   const assertR = await client.mandate.assert(wid, 'courier.send' as any, { hiveId })
-  assert.equal(assertR, undefined) // 授权通过、信封正确解包
+  assert.equal(assertR, true) // 授权通过返回 true
 
   const grants = await client.mandate.grants(wid)
   assert.ok(Array.isArray(grants))
@@ -221,7 +236,7 @@ test('断线重连重订（双杀循环）', async () => {
   assert.equal(server.ws.connectionCount, 1)
   const sock = [...server.ws.wss.clients][0]
   sock.terminate()
-  await waitFor(() => client.connected, 8000) // connected=OPEN && ready（补订全齐）
+  await waitReconnect() // 等 connected 翻 false 再翻 true（补订全齐）
 
   const afterP = nextEvent('task/created')
   await client.task.create(hiveId, { subject: 'reconn-1' })
@@ -235,7 +250,7 @@ test('断线重连重订（双杀循环）', async () => {
   // 第二次杀连接
   const sock2 = [...server.ws.wss.clients][0]
   sock2.terminate()
-  await waitFor(() => client.connected, 8000)
+  await waitReconnect()
 
   const afterP2 = nextEvent('task/created')
   await client.task.create(hiveId, { subject: 'reconn-2' })

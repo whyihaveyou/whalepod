@@ -36,7 +36,7 @@ function buildApi(): TeamApi {
   if (env.VITE_TEAM_API === "honeycomb") {
     return createHoneycombApi({
       httpUrl: env.VITE_HONEYCOMB_HTTP ?? "http://127.0.0.1:4800",
-      wsUrl: env.VITE_HONEYCOMB_WS ?? "ws://127.0.0.1:4801",
+      wsUrl: env.VITE_HONEYCOMB_WS ?? "ws://127.0.0.1:4800/ws",
       hiveId: env.VITE_HONEYCOMB_HIVE ?? "hive-dev",
     });
   }
