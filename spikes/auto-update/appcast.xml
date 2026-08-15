@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  auto-update spike 的最小 appcast（Sparkle 2 兼容格式）。
+  - 本格式同时是「自研轻量 updater (方案 B)」可直接解析的结构：取 <item>
+    的 sparkle:version(semver 排序) 找最新 → 拿 enclosure url + sha256。
+  - url 用相对路径 → 本 spike 直接用 file:// 或本地 http 起静态服务测试。
+  - 真实部署时这份 appcast.xml 在发版时生成并随 GitHub Releases 发布
+    （或放到静态站点），swift 壳读它做版本比对。
+
+  版本约定（关键）：CFBundleShortVersionString / sparkle:shortVersionString
+  必须每次发版递增（如 0.1.0-alpha.3 → 0.1.0-alpha.4），否则永远“已最新”。
+  当前安装的 app 若坚硬编码 0.1.0，则下面 0.1.0-alpha.5 永远大不过它——
+  本 spike 用「传入的本机版本」参数模拟这一比对。
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>WhalePod 更新通道</title>
+    <description>WhalePod (鲸群) 自动更新测试通道</description>
+    <item>
+      <title>Version 0.1.0-alpha.5</title>
+      <sparkle:shortVersionString>0.1.0-alpha.5</sparkle:shortVersionString>
+      <sparkle:version>5</sparkle:version>
+      <enclosure url="WhalePod-0.1.0-alpha.5-macos-arm64-full.dmg" sparkle:version="5" length="1" type="application/octet-stream"/>
+      <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+    </item>
+    <item>
+      <title>Version 0.1.0-alpha.4</title>
+      <sparkle:shortVersionString>0.1.0-alpha.4</sparkle:shortVersionString>
+      <sparkle:version>4</sparkle:version>
+      <enclosure url="WhalePod-0.1.0-alpha.4-macos-arm64-full.dmg" sparkle:version="4" length="1" type="application/octet-stream"/>
+      <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+    </item>
+  </channel>
+</rss>
