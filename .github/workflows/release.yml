@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   release:
-    name: Build macOS DMG + gh release upload
+    name: Build macOS DMG + Slim ZIP + gh release upload (manual)
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -45,7 +45,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10  # 与 ci.yml 对齐（honeycomb job 已迁 v10）
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,21 +56,23 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/honeycomb
-        run: pnpm install --no-audit --no-fund
+        run: pnpm install  # pnpm 10 移除 --no-audit/--no-fund
 
       - name: Build Swift shell (release)
         working-directory: HarnessShell
         run: swift build -c release
 
-      - name: Build .app bundle
+      - name: Build .app bundle — Full seed (后续 M0 注入 runtime)
         working-directory: HarnessShell
         run: ./Scripts/build-app.sh release
 
       # ====================================================================
       # 注意：build-runtime.sh 会从 nodejs.org 下载 node tarball + 从 npm
       # registry 拉 dsh 全家桶。在 CI runner 里走默认网络即可，不需代理。
+      # 仅 Full 档执行：Slim 档由 RuntimeBootstrap 探测链兜底（命中本机 node
+      # 或 npx，无 node 时显示引导文案），不打包 node/dsh 进 .app。
       # ====================================================================
-      - name: M0 bundled runtime (node + dsh)
+      - name: M0 bundled runtime (node + dsh) — Full only
         working-directory: HarnessShell
         run: ./Scripts/build-runtime.sh
 
@@ -78,25 +80,49 @@ jobs:
       # 签名档位：默认 ad-hoc（CI runner 无 Apple Developer 证书）。
       # 真实发版改用 sign.sh prod 档（需 DEVELOPER_ID / AC_PASSWORD secret）。
       # ====================================================================
-      - name: Sign .app (ad-hoc)
+      - name: Sign .app (ad-hoc) — Full
         run: |
           codesign --force --deep -s - HarnessShell/dist/HarnessShell.app
           codesign --verify --verbose HarnessShell/dist/HarnessShell.app
 
-      - name: Package DMG
+      - name: Package DMG — Full (主推档)
         working-directory: HarnessShell
         run: ./Scripts/make-dmg.sh
 
-      - name: Package ZIP (parallel for fast download)
+      - name: Package ZIP — Full (parallel for fast download)
         working-directory: HarnessShell
         run: ./Scripts/make-zip.sh
 
-      - name: Compute SHA256
+      # ====================================================================
+      # Slim 档（无 bundled node/dsh，命中 RuntimeBootstrap 探测链）：
+      #   build-app（不跑 build-runtime）→ ad-hoc 验证 → make-zip
+      #   产物：dist/WhalePod-<ver>-macos-arm64-slim.zip
+      #
+      # 复用 HarnessShell/Scripts/make-slim.sh（Flash-3 实现，Task #01a004cc）。
+      # 关键约束：
+      #   1. APP_NAME 默认 HarnessShell（SPM 产品名），切勿设 WhalePod
+      #      —— WhalePod 仅是 ZIP_NAME 的事；set APP_NAME=WhalePod 会因
+      #      无此 SPM 产品而构建失败（Flash-3 踩过的坑入档）。
+      #   2. 顺序必须在 Full DMG/ZIP 之后：make-slim.sh 内部 build-app.sh
+      #      会 `rm -rf dist/HarnessShell.app` 再重建，若先跑 Slim 会清掉
+      #      Full 已带 runtime 的 .app，导致 DMG/ZIP 缺 node/dsh。
+      # ====================================================================
+      - name: Package Slim ZIP — Slim 档 (无 bundled runtime)
+        working-directory: HarnessShell
+        env:
+          # tag 形如 v0.1.0；make-slim.sh 默认 VERSION=0.1.0 兜底
+          # （与 CHANGELOG.md [0.1.0] 段对齐；CHANGELOG 改时此 VERSION 也应同步）
+          VERSION_STR: ${{ inputs.tag }}
+        run: |
+          VERSION="${VERSION_STR#v}" ./Scripts/make-slim.sh
+
+      - name: Compute SHA256 — 双档
         run: |
           cd HarnessShell/dist
+          # 双行：Full DMG + Full ZIP + Slim ZIP（如有）+ 其他 .zip 变体
           shasum -a 256 *.dmg *.zip 2>/dev/null | tee SHA256SUMS
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release — 双档上传
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
