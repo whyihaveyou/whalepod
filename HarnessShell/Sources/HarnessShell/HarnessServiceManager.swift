@@ -408,6 +408,7 @@ final class HarnessServiceManager {
             }
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
+                self.recordLine(trimmed)
                 self.onOutput?(trimmed)
             }
         }
@@ -418,39 +419,103 @@ final class HarnessServiceManager {
     ///   `dsh web: http://127.0.0.1:58671/`
     ///   `Listening on http://localhost:58671`
     ///   `Server running at http://[::1]:58671`
+    ///
+    /// 防线：只从「明显是监听声明」的行抓端口。崩溃堆栈/报错文本里的数字
+    /// （如 `node:internal/modules/cjs/loader:1404:15`、时间戳、进程号）
+    /// 曾被裸 `:数字` 兜底误识别为端口（Bug#4 症状），因此行必须先命中提示词。
     static func parsePort(from text: String) -> Int? {
-        let patterns = [
-            #"http://[^:/]*(?::)?(\d+)"#,        // http://host:port 或 http://host/（无端口则跳过，下面兜底）
-            #"port[^\d]{0,20}(\d{2,5})"#,         // "port 12345"
-            #":(\d{2,5})"#,                       // 兜底：任何 :端口
-        ]
-        var candidates: [Int] = []
-        // 第一优先：明确的 URL 端口
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let ns = text as NSString
-                let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
-                for m in matches {
-                    if m.numberOfRanges >= 2 {
-                        let r = m.range(at: 1)
-                        if r.location != NSNotFound {
-                            let sub = ns.substring(with: r)
-                            if let v = Int(sub), v >= 1024, v <= 65535 {
-                                candidates.append(v)
-                            }
-                        }
-                    }
-                }
+        guard
+            let hintRe = try? NSRegularExpression(
+                pattern: #"https?://|localhost|0\.0\.0\.0|127\.0\.0\.1|\[::1\]|listening|listen on|running at|server ready|\bport\b"#,
+                options: .caseInsensitive
+            ),
+            let urlRe = try? NSRegularExpression(pattern: #"https?://[^\s/]*?:(\d{2,5})"#),
+            let hostPortRe = try? NSRegularExpression(pattern: #"(?:localhost|0\.0\.0\.0|127\.0\.0\.1|\[::1\]):(\d{2,5})"#),
+            let portRe = try? NSRegularExpression(pattern: #"\bport[^\d]{0,16}(\d{2,5})"#, options: .caseInsensitive)
+        else { return nil }
+
+        func extract(_ re: NSRegularExpression, from line: String) -> Int? {
+            let ns = line as NSString
+            let m = re.firstMatch(in: line, range: NSRange(location: 0, length: ns.length))
+            guard let m, m.numberOfRanges >= 2, m.range(at: 1).location != NSNotFound,
+                  let v = Int(ns.substring(with: m.range(at: 1))),
+                  v >= 1024, v <= 65535 else { return nil }
+            return v
+        }
+
+        for line in text.components(separatedBy: .newlines) {
+            let ns = line as NSString
+            let full = NSRange(location: 0, length: ns.length)
+            guard hintRe.firstMatch(in: line, range: full) != nil else { continue }
+            // 行内按可信度排序：完整 URL > host:port > "port" 关键字
+            if let p = extract(urlRe, from: line) ?? extract(hostPortRe, from: line) ?? extract(portRe, from: line) {
+                return p
             }
         }
-        // 自动端口通常 > 1024；取第一个合理值
-        return candidates.first
+        return nil
     }
 
     private func emitOutput(_ text: String) {
         DispatchQueue.main.async { [weak self] in
+            self?.recordLine(text)
             self?.onOutput?(text)
         }
+    }
+
+    // MARK: - 运行日志（环形缓冲 + 落盘；双击启动的场景 stderr 不可见，
+    // 失败页「复制最近日志」按钮与 logs/shell.log 是测试者的排查数据源）
+
+    /// 最近输出（最多 300 行；~40KB 上下，内存可忽略）。
+    private var recentLogLinesLog: [String] = []
+    private var shellLogHandle: FileHandle?
+    private let logWriteQueue = DispatchQueue(label: "io.whalepod.shelllog")
+
+    /// 日志目录（UI 上展示给测试者的排查入口）。
+    var logDirectoryURL: URL { DataRoot.logsDirURL }
+
+    /// 最近 300 行输出的纯文本（供复制）。
+    var recentLogText: String {
+        recentLogLinesLog.joined(separator: "\n")
+    }
+
+    private func recordLine(_ text: String) {
+        recentLogLinesLog.append(text)
+        if recentLogLinesLog.count > 300 {
+            recentLogLinesLog.removeFirst(recentLogLinesLog.count - 300)
+        }
+        ensureShellLogHandle()
+        guard let handle = shellLogHandle,
+              let data = (timestamped(text) + "\n").data(using: .utf8) else { return }
+        logWriteQueue.async {
+            try? handle.write(contentsOf: data)
+        }
+    }
+
+    private func ensureShellLogHandle() {
+        guard shellLogHandle == nil else { return }
+        let url = DataRoot.shellLogURL
+        rotateLogIfNeeded(url: url)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        shellLogHandle = try? FileHandle(forWritingTo: url)
+        shellLogHandle?.seekToEndOfFile()
+    }
+
+    /// 简单轮转：shell.log 超 1MB 归档为 shell-prev.log（单份保留，防无限增长）。
+    private func rotateLogIfNeeded(url: URL) {
+        let fm = FileManager.default
+        guard let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? Int,
+              size > 1_048_576 else { return }
+        let prev = url.deletingLastPathComponent().appendingPathComponent("shell-prev.log")
+        try? fm.removeItem(at: prev)
+        try? fm.moveItem(at: url, to: prev)
+    }
+
+    private func timestamped(_ text: String) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm:ss.SSS"
+        return "[\(df.string(from: Date()))] \(text)"
     }
 
     // MARK: - 工具

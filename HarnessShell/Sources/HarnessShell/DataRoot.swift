@@ -62,4 +62,16 @@ enum DataRoot {
     static var harnessHomeURL: URL {
         baseURL.appendingPathComponent("harness", isDirectory: true)
     }
+
+    /// 壳运行日志目录：`WhalePod/logs/`（shell.log 等，问题排查 / 「复制日志」按钮的数据源）。
+    static var logsDirURL: URL {
+        let url = baseURL.appendingPathComponent("logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// 壳运行日志：`WhalePod/logs/shell.log`（超过 1MB 轮转归档为 shell-prev.log，单份保留）。
+    static var shellLogURL: URL {
+        logsDirURL.appendingPathComponent("shell.log")
+    }
 }

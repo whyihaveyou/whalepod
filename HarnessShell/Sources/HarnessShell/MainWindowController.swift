@@ -24,6 +24,11 @@ final class MainWindowController: NSWindowController {
     private let overlayLabel = NSTextField(labelWithString: "")
     private let overlayCaption = NSTextField(labelWithString: "")
     private var overlayPrimaryButton = ChromeButton()
+    /// 「复制最近日志」按钮（仅 .failed 态显示，其余隐藏）。
+    private var copyLogButton = ChromeButton()
+    /// 启动等待提示：.starting/.restarting 超过 25s 后在副文案提示可能需要几分钟。
+    private var slowStartTimer: Timer?
+    private var startingWaitBeganAt: Date?
     private let spinner = NSProgressIndicator()
 
     private var webView: WKWebView!
@@ -189,6 +194,9 @@ final class MainWindowController: NSWindowController {
         overlayCaption.alignment = .center
 
         overlayPrimaryButton = makeChromeButton(title: "启动服务", action: #selector(toggleService), style: .primary)
+        copyLogButton = makeChromeButton(title: "复制最近日志", action: #selector(copyRecentLog), style: .bordered)
+        copyLogButton.setAccessibilityLabel("复制最近日志")
+        copyLogButton.isHidden = true
 
         overlayStack.addArrangedSubview(overlayIcon)
         overlayStack.addArrangedSubview(overlayGlyph)
@@ -197,6 +205,7 @@ final class MainWindowController: NSWindowController {
         overlayStack.addArrangedSubview(overlayLabel)
         overlayStack.addArrangedSubview(overlayCaption)
         overlayStack.addArrangedSubview(overlayPrimaryButton)
+        overlayStack.addArrangedSubview(copyLogButton)
         // 品牌图标下方留 24px（规范 §5）
         overlayStack.setCustomSpacing(ShellTokens.Metrics.space6, after: overlayIcon)
 
@@ -262,11 +271,53 @@ final class MainWindowController: NSWindowController {
         }
     }
 
+    // MARK: - 启动等待提示 / 复制日志
+
+    /// .starting/.restarting 期间每 15s 刷新副文案：超过 25s 提示「冷启动可能需要几分钟」，
+    /// 避免用户在首次 pnpm 自愈 / npm 拉包等长冷启动时误以为卡死（「一直在转」反馈的根源）。
+    private func scheduleSlowStartHint() {
+        if startingWaitBeganAt == nil { startingWaitBeganAt = Date() }
+        guard slowStartTimer == nil else { return }
+        let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
+            guard let self, let beganAt = self.startingWaitBeganAt else { return }
+            let waited = Int(Date().timeIntervalSince(beganAt))
+            guard waited >= 25 else { return }
+            self.overlayCaption.stringValue = "冷启动可能需要几分钟（已等待 \(waited)s）…"
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        slowStartTimer = timer
+    }
+
+    private func cancelSlowStartHint() {
+        slowStartTimer?.invalidate()
+        slowStartTimer = nil
+        startingWaitBeganAt = nil
+    }
+
+    /// .failed 页按钮：把最近 300 行输出（含日志目录指引）复制到剪贴板，便于测试者贴回问题。
+    @objc private func copyRecentLog() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let header = "—— WhalePod 诊断（日志目录：\(serviceManager.logDirectoryURL.path)；完整文件 shell.log / shell-prev.log）——"
+        let body = serviceManager.recentLogText
+        pasteboard.setString(header + "\n" + (body.isEmpty ? "（暂无输出）" : body), forType: .string)
+        copyLogButton.setTitle("已复制 ✓")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.copyLogButton.setTitle("复制最近日志")
+        }
+    }
+
     private func updateUI(state: HarnessServiceManager.State) {
+        if case .failed = state {
+            copyLogButton.isHidden = false
+        } else {
+            copyLogButton.isHidden = true
+        }
         switch state {
         case .running:
             statusDot.fill = ShellTokens.Color.statusActive
             stopBreathing()
+            cancelSlowStartHint()
             statusLabel.attributedStringValue = runningStatusText()
             toggleButton.setTitle("停止服务")
             toggleButton.isEnabled = true
@@ -281,6 +332,7 @@ final class MainWindowController: NSWindowController {
         case .starting:
             statusDot.fill = ShellTokens.Color.statusProgress
             startBreathing()
+            scheduleSlowStartHint()
             statusLabel.stringValue = "正在启动服务…"
             toggleButton.setTitle("停止服务")
             toggleButton.isEnabled = true
@@ -298,6 +350,7 @@ final class MainWindowController: NSWindowController {
             // 崩溃退避重启：视觉同 starting（进行中），文案带尝试次数
             statusDot.fill = ShellTokens.Color.statusProgress
             startBreathing()
+            scheduleSlowStartHint()
             statusLabel.stringValue = "服务意外退出，\(Int(delay))s 后第 \(attempt) 次重启…"
             toggleButton.setTitle("停止服务")
             toggleButton.isEnabled = true
@@ -313,6 +366,7 @@ final class MainWindowController: NSWindowController {
         case .stopped:
             statusDot.fill = ShellTokens.Color.statusIdle
             stopBreathing()
+            cancelSlowStartHint()
             statusLabel.stringValue = "服务未运行"
             toggleButton.setTitle("启动服务")
             toggleButton.isEnabled = true
@@ -330,6 +384,7 @@ final class MainWindowController: NSWindowController {
         case .failed(let message):
             statusDot.fill = ShellTokens.Color.statusDanger
             stopBreathing()
+            cancelSlowStartHint()
             statusLabel.stringValue = message
             toggleButton.setTitle("启动服务")
             toggleButton.isEnabled = true
@@ -339,7 +394,8 @@ final class MainWindowController: NSWindowController {
             overlayTitle.stringValue = "⚠ 服务启动失败"
             overlayTitle.isHidden = false
             overlayLabel.stringValue = message
-            overlayCaption.isHidden = true
+            overlayCaption.stringValue = "输出日志目录：\(serviceManager.logDirectoryURL.path)"
+            overlayCaption.isHidden = false
             overlayPrimaryButton.setTitle("重试")
             overlayPrimaryButton.isHidden = false
             setOverlayVisible(true)
