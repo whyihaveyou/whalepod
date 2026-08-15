@@ -90,6 +90,7 @@ export interface TeammateDescriptor {
  */
 export type SessionEvent =
   | { type: 'stream'; chunk: string }
+  | { type: 'image'; source: 'agent' | 'tool' | 'user'; toolCallId?: string; mimeType: string; data: string }
   | { type: 'tool-call'; id: string; name: string; arguments: unknown }
   | { type: 'tool-result'; id: string; content: unknown }
   | { type: 'approval-request'; id: string; prompt: string }

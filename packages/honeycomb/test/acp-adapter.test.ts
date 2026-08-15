@@ -2,13 +2,14 @@
  * @dfh/honeycomb/connectors/adapters/acp — ACP adapter 测试
  *
  * 覆盖：
- *   1. 事件映射正确性（normalizeSessionUpdate）—— 纯函数单测
+ *   1. 事件映射正确性（normalizeSessionUpdate）—— 纯函数单测，含 image 透传
  *   2. 检测层（detect）—— 命中 PATH shim + capability probe
  *   3. 会话生命周期 —— mock ACP 子进程，跑通 initialize → newSession →
  *      send(prompt) → 收到 stream + tool-call + tool-result + done
  *   3b. cancel() —— 中断 in-flight prompt，emit cancelled（而非 done）；
  *       无 in-flight 时是 no-op，不影响后续 turn
- *   4. live（可选）—— 本机有 `opencode` 时跑 `opencode acp` 真链路
+ *   3c. image 透传 —— mock 发 image chunk → SessionEvent.image
+ *   4. live（可选）—— 本机有 `opencode` / `kimi` 时跑真 ACP 链路
  *
  * 跑法：`pnpm tsx --test test/acp-adapter.test.ts`
  *
@@ -61,12 +62,74 @@ test('normalizeSessionUpdate: agent_thought_chunk → stream', () => {
   assert.equal(evs[0].type, 'stream')
 })
 
-test('normalizeSessionUpdate: image chunk → no event (skipped)', () => {
+test('normalizeSessionUpdate: image chunk → image event (source=agent, base64 透传)', () => {
   const evs = normalizeSessionUpdate({
     sessionUpdate: 'agent_message_chunk',
-    content: { type: 'image', data: 'base64', mimeType: 'image/png' },
+    content: { type: 'image', data: 'BASE64DATA==', mimeType: 'image/png' },
   })
-  assert.equal(evs.length, 0)
+  assert.equal(evs.length, 1)
+  assert.equal(evs[0].type, 'image')
+  const ev = evs[0] as { type: 'image'; source: string; mimeType: string; data: string }
+  assert.equal(ev.source, 'agent')
+  assert.equal(ev.mimeType, 'image/png')
+  assert.equal(ev.data, 'BASE64DATA==')
+  assert.equal(ev.toolCallId, undefined)
+})
+
+test('normalizeSessionUpdate: text + image 同 chunk → stream + image 两个事件', () => {
+  const evs = normalizeSessionUpdate({
+    sessionUpdate: 'agent_message_chunk',
+    content: { type: 'text', text: 'see this:' },
+  })
+  // 单 content block 只能一种类型；用两个 chunk 模拟"text 后续 image" 的常见流
+  const evs2 = normalizeSessionUpdate({
+    sessionUpdate: 'agent_message_chunk',
+    content: { type: 'image', data: 'PNG', mimeType: 'image/png' },
+  })
+  assert.equal(evs.length, 1)
+  assert.equal(evs[0].type, 'stream')
+  assert.equal((evs[0] as { type: 'stream'; chunk: string }).chunk, 'see this:')
+  assert.equal(evs2.length, 1)
+  assert.equal(evs2[0].type, 'image')
+})
+
+test('normalizeSessionUpdate: tool_call 含 image content → tool-call + image + tool-result', () => {
+  const evs = normalizeSessionUpdate({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'tc-img',
+    title: 'screenshot',
+    name: 'screenshot',
+    status: 'completed',
+    content: [
+      { type: 'image', data: 'SCREENSHOT', mimeType: 'image/jpeg' },
+      { type: 'content', content: { type: 'text', text: '1920x1080' } },
+    ],
+  })
+  // 期望顺序：tool-call（声明）→ image（结果片段，让 UI 提前渲染）→ tool-result（完整结果）
+  assert.equal(evs.length, 3, `expected 3 events, got ${evs.length}: ${JSON.stringify(evs)}`)
+  assert.equal(evs[0].type, 'tool-call')
+  assert.equal(evs[1].type, 'image')
+  const img = evs[1] as { type: 'image'; source: string; toolCallId?: string; mimeType: string; data: string }
+  assert.equal(img.source, 'tool')
+  assert.equal(img.toolCallId, 'tc-img')
+  assert.equal(img.mimeType, 'image/jpeg')
+  assert.equal(img.data, 'SCREENSHOT')
+  assert.equal(evs[2].type, 'tool-result')
+})
+
+test('normalizeSessionUpdate: tool_call_update 含 image content → image + tool-result（不再额外发 tool-call）', () => {
+  const evs = normalizeSessionUpdate({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'tc-img-2',
+    status: 'completed',
+    content: [{ type: 'image', data: 'JPEG', mimeType: 'image/jpeg' }],
+  })
+  assert.equal(evs.length, 2)
+  assert.equal(evs[0].type, 'image')
+  const img = evs[0] as { type: 'image'; source: string; toolCallId?: string }
+  assert.equal(img.source, 'tool')
+  assert.equal(img.toolCallId, 'tc-img-2')
+  assert.equal(evs[1].type, 'tool-result')
 })
 
 test('normalizeSessionUpdate: tool_call + completed content → tool-call + tool-result', () => {
@@ -462,6 +525,67 @@ test('AcpSession.cancel(): 无 in-flight prompt 时是 no-op，不抛错、不�
   } finally {
     await session.kill()
     delete process.env.ACP_MOCK_KEEP_ALIVE
+  }
+})
+
+// =====================================================================
+// 5. image 透传 e2e（mock agent 端到端）
+// =====================================================================
+
+test('AcpAdapter.spawnSession: image 透传 → mock 发的 image chunk 被映射成 SessionEvent.image', async () => {
+  process.env.ACP_MOCK_EMIT_IMAGE = '1'
+  delete process.env.ACP_MOCK_EMIT_TOOLCALL
+  delete process.env.ACP_MOCK_FAIL_AFTER
+  delete process.env.ACP_MOCK_KEEP_ALIVE
+  delete process.env.ACP_MOCK_CANCEL_AFTER
+
+  const adapter = new AcpAdapter({
+    id: 'mock-acp-image',
+    displayName: 'ACP image',
+    kind: 'opencode',
+    binaryName: 'node',
+    spawnArgs: [MOCK_BIN],
+    configDirName: '.mock-acp-image',
+    capabilities: [{ id: 'image' }],
+  })
+  const descriptor = {
+    id: 'mock-acp-image',
+    displayName: 'ACP image',
+    kind: 'opencode' as const,
+    binPath: process.execPath,
+    confidence: 'binary' as const,
+    capabilities: [{ id: 'image' }],
+    probe: [],
+    acp: { spawnArgs: [MOCK_BIN] },
+  }
+  const session = await adapter.spawnSession({ cwd: tmpdir(), env: process.env, descriptor })
+  try {
+    const events: Array<{ type: string; [k: string]: unknown }> = []
+    const collector = (async () => {
+      for await (const ev of session.events) {
+        events.push(ev as { type: string })
+      }
+    })()
+    await session.send({ content: 'send me a picture' })
+    await Promise.race([
+      collector,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('collector timeout')), 2_000)),
+    ]).catch(() => {})
+
+    const imageEvents = events.filter((e) => e.type === 'image') as Array<
+      { type: 'image'; source: string; mimeType: string; data: string }
+    >
+    assert.equal(imageEvents.length, 1, `expected 1 image event, got ${imageEvents.length}: ${JSON.stringify(events)}`)
+    assert.equal(imageEvents[0]!.source, 'agent')
+    assert.equal(imageEvents[0]!.mimeType, 'image/png')
+    assert.ok(imageEvents[0]!.data.length > 0, 'image data should be non-empty base64')
+    // stream + image + done 顺序
+    const types = events.map((e) => e.type)
+    assert.ok(types.includes('stream'), `expected stream, got: ${types}`)
+    assert.ok(types.includes('done'), `expected done, got: ${types}`)
+  } finally {
+    await session.kill()
+    delete process.env.ACP_MOCK_EMIT_IMAGE
   }
 })
 

@@ -19,6 +19,8 @@
  * 行为可通过环境变量定制：
  *   - ACP_MOCK_FAIL_AFTER=<n>：第 n 个 chunk 后停止响应（用于测试故障路径）
  *   - ACP_MOCK_EMIT_TOOLCALL=1：除 stream chunks 外还发一条 tool_call + tool_result
+ *   - ACP_MOCK_EMIT_IMAGE=1：在第 1 个 stream chunk 之后插一条 agent_message_chunk
+ *     携带 image content（PNG base64），用于测试 image 透传
  *   - ACP_MOCK_DELAY_MS=<n>：每条消息间隔 n ms（默认 5）
  *   - ACP_MOCK_KEEP_ALIVE=1：处理完 prompt 后不退出（用于 live 测试）
  *   - ACP_MOCK_CANCEL_AFTER=<n>：在发出第 n 个 chunk 后，假装收到 session/cancel
@@ -29,6 +31,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 const failAfter = Number(process.env.ACP_MOCK_FAIL_AFTER ?? Infinity)
 const emitToolcall = process.env.ACP_MOCK_EMIT_TOOLCALL === '1'
+const emitImage = process.env.ACP_MOCK_EMIT_IMAGE === '1'
 const delayMs = Number(process.env.ACP_MOCK_DELAY_MS ?? 5)
 const keepAlive = process.env.ACP_MOCK_KEEP_ALIVE === '1'
 const cancelAfter = Number(process.env.ACP_MOCK_CANCEL_AFTER ?? Infinity)
@@ -121,6 +124,21 @@ async function handle(req) {
           },
         })
         i++
+        // 第一条 stream chunk 之后插一条 image chunk（如果开启）
+        if (emitImage && i === 1) {
+          writeNotification('session/update', {
+            sessionId: req.params.sessionId,
+            update: {
+              sessionUpdate: 'agent_message_chunk',
+              content: {
+                type: 'image',
+                data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+                mimeType: 'image/png',
+              },
+            },
+          })
+          if (delayMs) await sleep(delayMs)
+        }
         if (delayMs) await sleep(delayMs)
       }
       if (emitToolcall && !cancelRequested && i < failAfter && i < cancelAfter) {

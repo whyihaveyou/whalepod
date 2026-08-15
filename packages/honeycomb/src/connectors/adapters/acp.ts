@@ -148,6 +148,10 @@ export function normalizeSessionUpdate(update: SessionUpdate): SessionEvent[] {
       if (text !== null) {
         out.push({ type: 'stream', chunk: text })
       }
+      // image content 与 text 共存于同一 chunk（ACP 允许 content 是 image 时不带 text）
+      for (const img of extractImages(update.content)) {
+        out.push({ type: 'image', source: 'agent', mimeType: img.mimeType, data: img.data })
+      }
       break
     }
     case 'agent_thought_chunk': {
@@ -166,6 +170,17 @@ export function normalizeSessionUpdate(update: SessionUpdate): SessionEvent[] {
         name: tc.title ?? tc.name ?? tc.toolCallId,
         arguments: tc.rawInput ?? tc.content ?? null,
       })
+      // tool_call.content 里的 image 单独 emit image 事件（source='tool'，绑 toolCallId），
+      // 让 UI 能直接渲染图，而不必遍历 tool-result 的混合 content 数组。
+      for (const img of collectImagesFromArray(tc.content)) {
+        out.push({
+          type: 'image',
+          source: 'tool',
+          toolCallId: tc.toolCallId,
+          mimeType: img.mimeType,
+          data: img.data,
+        })
+      }
       // 同一个 tool_call 里也可能带 content（早期完成的工具），兜底补一条 result。
       const completed =
         tc.status === 'completed' ||
@@ -182,6 +197,16 @@ export function normalizeSessionUpdate(update: SessionUpdate): SessionEvent[] {
     }
     case 'tool_call_update': {
       const tcu: ToolCallUpdate = update
+      // 同 tool_call：先 emit image 事件，再 emit tool-result。
+      for (const img of collectImagesFromArray(tcu.content)) {
+        out.push({
+          type: 'image',
+          source: 'tool',
+          toolCallId: tcu.toolCallId,
+          mimeType: img.mimeType,
+          data: img.data,
+        })
+      }
       if (tcu.status === 'completed' || tcu.status === 'failed') {
         out.push({
           type: 'tool-result',
@@ -214,6 +239,36 @@ export function normalizeSessionUpdate(update: SessionUpdate): SessionEvent[] {
 function extractText(content: ContentBlock): string | null {
   if (content.type === 'text') return content.text
   return null
+}
+
+/**
+ * 从单个 ContentBlock 抽 image 字段。ACP ImageContent 是
+ * `{ data: string (base64), mimeType: string, uri?, annotations?, _meta? }`。
+ * 拿到的 data 已经是 base64 字符串，透传时不再做 buffer 转换（避免无谓的
+ * Uint8Array ↔ Buffer 互转开销，也保留原始字节序）。
+ */
+function extractImages(content: ContentBlock): Array<{ mimeType: string; data: string }> {
+  if (content.type === 'image') {
+    return [{ mimeType: content.mimeType, data: content.data }]
+  }
+  return []
+}
+
+/**
+ * 工具调用里 content 是 ContentBlock[]（ACP 允许 tool result 里混 text/image/resource），
+ * 收集所有 image content 块供 emit。
+ */
+function collectImagesFromArray(
+  blocks: ReadonlyArray<ContentBlock> | undefined,
+): Array<{ mimeType: string; data: string }> {
+  if (!blocks) return []
+  const out: Array<{ mimeType: string; data: string }> = []
+  for (const b of blocks) {
+    if (b.type === 'image') {
+      out.push({ mimeType: b.mimeType, data: b.data })
+    }
+  }
+  return out
 }
 
 // ---------- AcpSession + 事件队列 ----------

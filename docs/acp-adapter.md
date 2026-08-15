@@ -47,7 +47,8 @@ ACP 是 @agentclientprotocol 主导的跨厂商协议（JSON-RPC 2.0 over stdio 
 | ----------------------------- | --------------------------------- |
 | `agent_message_chunk` (text)  | `stream` chunk                    |
 | `agent_thought_chunk` (text)  | `stream` chunk（透传）） |
-| `agent_message_chunk` (image) | （忽略 —— ③ image 透传 待实现；kimi acp 已声明 image capability 但当前 adapter 还没启用 image 事件分支） |
+| `agent_message_chunk` (image) | `{ type: 'image', source: 'agent', mimeType, data (base64) }` |
+| `tool_call` / `tool_call_update` (content 里的 image) | `{ type: 'image', source: 'tool', toolCallId, mimeType, data }`（在 `tool-call`/`tool-result` 事件之间） |
 | `tool_call`                   | `tool-call` + `tool-result`（如完成）|
 | `tool_call_update`            | `tool-result`（仅 completed/failed）|
 | `plan` / `plan_update` / …    | （忽略，纯展示/状态）             |
@@ -182,6 +183,24 @@ ACP 的 `session/request_permission` 是「agent 主动问 client 是否可以�
 
 ## 已实现能力
 
+### `image` 事件透传
+
+`SessionEvent` 加 `{ type: 'image', source: 'agent' | 'tool' | 'user', toolCallId?, mimeType, data }` 变体；`normalizeSessionUpdate` 把 ACP `agent_message_chunk` / `tool_call` / `tool_call_update` 里的 image content 拆出来单独 emit。
+
+事件顺序约定（避免 UI 渲染闪烁）：
+- `agent_message_chunk` (image) → `image` 事件
+- `tool_call` (含 image content) → `tool-call` → `image`（绑 toolCallId）→ `tool-result`
+- `tool_call_update` (含 image content) → `image` → `tool-result`
+
+data 字段保留 ACP 原生的 base64 字符串，**不做 buffer 转换**（避免无谓的 Uint8Array ↔ Buffer 互转开销，保留原始字节序）。下游消费者按需解析。
+
+`source` 区分来源：
+- `'agent'`：agent 自己发的图（agent_message_chunk）
+- `'tool'`：工具调用结果里夹带的图（tool_call / tool_call_update）
+- `'user'`：留给未来 harness 注入 prompt 图像的扩展位（当前 adapter 不消费 user_message_chunk）
+
+需要 dispatch 端正确 capability-match：`kimi-code-acp` catalog 已声明 `image` capability，所以 harness 把 image 任务派给它时不会被筛掉。
+
 ### `AcpSession.cancel()`：中断 in-flight prompt turn
 
 `AgentSession` 契约里 `cancel?(): Promise<void>` 是**可选**方法（其他 5 个 adapter 暂未实现，调用方需 feature-detect）。AcpSession 的实现：
@@ -201,9 +220,9 @@ ACP 的 `session/request_permission` 是「agent 主动问 client 是否可以�
 | 限制                                       | 后续工作                                           |
 | ------------------------------------------ | -------------------------------------------------- |
 | 默认 permission 策略 fail-closed           | harness 提供 `ctx.onPermissionRequest` UI 决策       |
-| 不支持 `session/load`（续接已有 session）   | catalog 里设 `loadSession: true` 后接入 `conn.loadSession` |
+| 不支持 `session/load`（续接已有 session）   | catalog 里设 `loadSession: true` 后接入 `conn.loadSession`（kimi acp 自报 loadSession: true，已为 follow-up 准备） |
 | 无 `fs` capability（read_text_file / write_text_file）| harness 通过 ClientCapabilities 协商               |
-| 不透传 image / audio / resource content    | `normalizeSessionUpdate` 加 image 类型分支           |
+| audio / resource content 仍未透传          | `normalizeSessionUpdate` 加 audio + resource 类型分支（image 已实现） |
 | 其他 5 个 adapter 未实现 `cancel()`        | opencode/codex/kimi/hermes/claude-code 各自按 CLI 协议实现 |
 
 ## 测试覆盖
@@ -231,6 +250,12 @@ test/acp-adapter.test.ts
 ├─ 5b. cancel() (2 用例)
 │     - mid-turn cancel → stream + cancelled（不再有 done）
 │     - idle cancel → no-op，不影响后续 send → done
+├─ 5c. image 透传 (1 用例 e2e + 4 用例 normalize)
+│     - e2e: mock 发 image chunk → SessionEvent.image(source=agent, mimeType=image/png)
+│     - normalize: agent_message_chunk image → 1 image event
+│     - normalize: text + image 同 chunk → stream + image
+│     - normalize: tool_call 含 image → tool-call + image + tool-result
+│     - normalize: tool_call_update 含 image → image + tool-result
 ├─ 6. ACP_CATALOG sanity (2 用例)
 │     - opencode-acp 字段一致
 │     - kimi-code-acp 字段与实测对齐（spawnArgs=acp, image capability）
@@ -244,7 +269,7 @@ test/acp-adapter.test.ts
 跑法：
 
 ```sh
-# 默认（18 用例 + 2 skip live）
+# 默认（22 用例 + 2 skip live）
 pnpm tsx --test test/acp-adapter.test.ts
 
 # 启用 live 测试（需本机 opencode 和/或 kimi）
