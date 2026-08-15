@@ -5,7 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_TEAM_API?: string
   /** honeycomb transport HTTP 地址（默认 http://127.0.0.1:4800） */
   readonly VITE_HONEYCOMB_HTTP?: string
-  /** honeycomb transport WS 地址（默认 ws://127.0.0.1:4801） */
+  /** honeycomb transport WS 地址（默认 ws://127.0.0.1:4800/ws，HTTP+WS 同端口） */
   readonly VITE_HONEYCOMB_WS?: string
   /** 面板订阅的 hive id（默认 hive-dev；server 侧须已存在该 hive） */
   readonly VITE_HONEYCOMB_HIVE?: string
