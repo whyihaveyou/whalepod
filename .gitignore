@@ -5,6 +5,13 @@ dist/
 lib/
 *.tsbuildinfo
 
+# HarnessShell 打包产物（dist/HarnessShell.app/.dmg/.zip 由 Scripts/* 重建）
+HarnessShell/dist/
+*.app/
+*.dmg
+*.zip
+*.pkg
+
 # 上游克隆与参考仓库（非本项目代码）
 deepseek-harness/
 refs/
@@ -15,3 +22,36 @@ coverage/
 
 # 系统/编辑器
 .DS_Store
+.idea/
+.vscode/
+
+# 用户运行时配置与数据（绝不入库）
+~/.harness-shell/
+.harness-shell/
+.harness/
+.dsh/
+.harness-shim/
+harness-shim/
+**/config.local.json
+**/.env
+**/.env.*
+**/*.env
+
+# macOS Application Support 下的用户数据目录
+# （即使重命名如 ~/Library/Application Support/WhalePod 也遵循本规则）
+Library/Application Support/*/
+
+# 临时诊断/调试残留（公开前必须清理）
+/tmp-diag-*/
+bisect-*.test.ts
+probe-live.ts
+repro-live.test.ts
+repro-real-live.test.ts
+
+# 密钥与本地凭据（绝不入库）
+*.pem
+*.key
+*.p12
+*.keystore
+secrets/
+.credentials/

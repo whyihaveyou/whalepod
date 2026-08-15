@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2026 WhalePod Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+
+ACKNOWLEDGEMENTS / 致谢
+
+This project stands on the shoulders of DeepSeek Harness
+(https://github.com/deepseek-ai/deepseek-harness), an Apache-2.0 licensed
+multi-agent orchestration framework. The macOS desktop shell (HarnessShell/)
+embeds the harness runtime; the `@whalepod/honeycomb` plugin (packages/honeycomb/)
+adapts its Cordis plugin primitives (service / events / lifecycle / config /
+persistence) into the workstation's team-management model.
+
+Special thanks to:
+  * DeepSeek — for the upstream `deepseek-harness` project and the
+    `@deepseek-ai/cordis` / `@deepseek-ai/schemastery` plugin primitives that
+    `@whalepod/honeycomb` builds on.
+  * Shigma — author of the original Cordis framework that the harness fork
+    derives from.
+  * dataelement — author of `dsh-desktop` (MIT), the reference Electron
+    implementation we studied while designing HarnessShell's "out-of-the-box"
+    experience. See `refs/dsh-desktop/LICENSE` for its full text.
+
+The `refs/` and `deepseek-harness/` directories in this repository are
+ignored from version control; they are local reference copies only and are
+not part of the distributed Software.
