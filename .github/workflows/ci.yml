@@ -55,7 +55,7 @@ jobs:
         working-directory: packages/honeycomb
         run: pnpm run test
 
-      - name: 'Run deterministic test suite (12 pinned + native-runtime 条件纳入; live 自动 skip)'
+      - name: 'Run deterministic test suite (15 pinned + native-runtime 条件纳入; live 自动 skip)'
         working-directory: packages/honeycomb
         run: |
           set -euo pipefail
@@ -82,6 +82,8 @@ jobs:
             test/orchestration-loop.test.ts \
             test/watchdog-repro.test.ts \
             test/cancel-dispatch.test.ts \
+            test/connector-cancel.test.ts \
+            test/agent-runtime-workstate.test.ts \
             test/connector-live.test.ts \
             test/acp-adapter.test.ts \
             test/acp-kimi-live.test.ts
