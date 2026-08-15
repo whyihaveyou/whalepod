@@ -3,6 +3,8 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var windowController: MainWindowController?
+    /// 自动更新检查服务（M1：仅检出+提示，不做替换）。
+    private var updater: UpdaterService?
 
     /// 冷启动时暂存的深链（application:openURLs 可能先于 didFinishLaunching 到达）。
     private var pendingDeepLink: DeepLink?
@@ -25,6 +27,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingDeepLink = nil
             controller.handle(deepLink: link)
         }
+
+        startAutoUpdate(on: controller)
+    }
+
+    /// 启动自动更新（M1：检出有新版 → banner 提示 + 打开 release 页按钮；不做替换）。
+    private func startAutoUpdate(on controller: MainWindowController) {
+        let enabled = ServiceConfig.load().autoUpdate
+        let service = UpdaterService(autoUpdateEnabled: enabled)
+        service.onStateChange = { [weak controller] state in
+            switch state {
+            case .available(let info):
+                guard let controller else { return }
+                controller.showUpdateBanner(version: info.version, releaseURL: info.releaseURL)
+            case .idle, .checking, .upToDate, .error, .disabled:
+                controller?.hideUpdateBanner()
+            }
+        }
+        updater = service
+        service.start()
     }
 
     /// 深链入口：应用已在运行（或冷启动早于 didFinishLaunching 时）由系统回调。
@@ -54,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        updater?.stop()
         windowController?.shutdown()
     }
 

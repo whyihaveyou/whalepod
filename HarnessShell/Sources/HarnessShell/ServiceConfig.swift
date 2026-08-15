@@ -14,7 +14,8 @@ import Foundation
 ///   "workingDirectory": "/Users/qzp/aion2dsh/deepseek-harness",
 ///   "host": "127.0.0.1",
 ///   "port": 0,
-///   "environment": { "NODE_ENV": "production" }
+///   "environment": { "NODE_ENV": "production" },
+///   "autoUpdate": true
 /// }
 /// ```
 ///
@@ -37,6 +38,8 @@ struct ServiceConfig: Codable {
     var port: Int
     /// 额外的环境变量。
     var environment: [String: String]
+    /// 自动更新开关（默认 true；旧 config.json 无此字段 → 走默认 true，向后兼容）。
+    var autoUpdate: Bool
 
     /// 是否自动端口模式。
     var isAutoPort: Bool { port <= 0 }
@@ -54,7 +57,8 @@ struct ServiceConfig: Codable {
         workingDirectory: nil,
         host: "127.0.0.1",
         port: 0,
-        environment: [:]
+        environment: [:],
+        autoUpdate: true
     )
 
     /// 容错加载：配置文件缺失/损坏/字段缺失都回落到默认值。
@@ -70,6 +74,7 @@ struct ServiceConfig: Codable {
         if let v = file.host { config.host = v }
         if let v = file.port { config.port = v }
         if let v = file.environment { config.environment = v }
+        if let v = file.autoUpdate { config.autoUpdate = v }
         return config
     }
 
@@ -95,5 +100,6 @@ struct ServiceConfig: Codable {
         var host: String?
         var port: Int?
         var environment: [String: String]?
+        var autoUpdate: Bool?
     }
 }

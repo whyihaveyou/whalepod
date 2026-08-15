@@ -40,6 +40,12 @@ final class MainWindowController: NSWindowController {
     /// 上次加载的端口（用于崩溃重启后端口变化的 reload 跟随，风险 B）。
     private var lastLoadedPort: Int?
 
+    // MARK: 更新 banner（M1：检出有新版提示，最小增量，见 UpdaterService）
+    private let updateBanner = ThemedView(fill: ShellTokens.Color.bgElevated)
+    private let updateBannerLabel = NSTextField(labelWithString: "")
+    private var updateBannerButton = ChromeButton()
+    private var updateBannerReleaseURL: URL?
+
     init() {
         config = ServiceConfig.load()
         serviceManager = HarnessServiceManager(config: config)
@@ -144,6 +150,9 @@ final class MainWindowController: NSWindowController {
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(webView)
+
+        // ---- 更新 banner（M1：检出有新版提示；加在 webView 之后 overlay 之前，浮于 web 内容之上） ----
+        setupUpdateBanner()
 
         // ---- 覆盖层（加载页 / 未运行页 / 错误页，规范 §5/§6） ----
         overlayView.translatesAutoresizingMaskIntoConstraints = false
@@ -811,5 +820,90 @@ private extension NSView {
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return view
+    }
+}
+
+// MARK: - 更新 banner（M1：UpdaterService 检出有新版 → 提示 + 打开 release 页；不做替换）
+
+extension MainWindowController {
+
+    /// 搭建更新 banner：浮于 web 内容顶部（z 序在 overlay 之下），默认淡出隐藏，
+    /// 用 alpha 显隐不参与布局挤动（对齐本文件 overlay 的既有模式）。
+    private func setupUpdateBanner() {
+        guard let contentView = window?.contentView else { return }
+
+        updateBanner.translatesAutoresizingMaskIntoConstraints = false
+        updateBanner.wantsLayer = true
+        updateBanner.layer?.cornerRadius = ShellTokens.Metrics.radiusMD
+        updateBanner.layer?.borderWidth = 1
+        updateBanner.layer?.borderColor = ShellTokens.Color.borderStrong.cgColor
+        updateBanner.alphaValue = 0          // 默认隐藏
+        updateBanner.isHidden = false
+
+        updateBannerLabel.font = ShellTokens.Font.statusText
+        updateBannerLabel.textColor = ShellTokens.Color.textPrimary
+        updateBannerLabel.lineBreakMode = .byTruncatingTail
+
+        updateBannerButton = makeChromeButton(
+            title: "查看更新", action: #selector(openUpdateReleasePage), style: .bordered
+        )
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = ShellTokens.Metrics.space3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(updateBannerLabel)
+        stack.addArrangedSubview(updateBannerButton)
+
+        updateBanner.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            updateBanner.topAnchor.constraint(
+                equalTo: topBar.bottomAnchor, constant: ShellTokens.Metrics.space2
+            ),
+            updateBanner.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor, constant: ShellTokens.Metrics.space4
+            ),
+            updateBanner.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -ShellTokens.Metrics.space4
+            ),
+            stack.leadingAnchor.constraint(
+                equalTo: updateBanner.leadingAnchor, constant: ShellTokens.Metrics.space3
+            ),
+            stack.trailingAnchor.constraint(
+                equalTo: updateBanner.trailingAnchor, constant: -ShellTokens.Metrics.space3
+            ),
+            stack.topAnchor.constraint(
+                equalTo: updateBanner.topAnchor, constant: ShellTokens.Metrics.space2
+            ),
+            stack.bottomAnchor.constraint(
+                equalTo: updateBanner.bottomAnchor, constant: -ShellTokens.Metrics.space2
+            ),
+        ])
+    }
+
+    /// 有新版：显示 banner 并记录 release 下载页地址。
+    func showUpdateBanner(version: String, releaseURL: URL) {
+        updateBannerReleaseURL = releaseURL
+        updateBannerLabel.stringValue = "有一个新版本 \(version) 可用"
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.2
+            updateBanner.animator().alphaValue = 1
+        }
+    }
+
+    /// 无新版 / 离线 / 禁用 / 检查中：隐藏 banner。
+    func hideUpdateBanner() {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.2
+            updateBanner.animator().alphaValue = 0
+        }
+    }
+
+    @objc private func openUpdateReleasePage() {
+        if let url = updateBannerReleaseURL {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
