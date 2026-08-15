@@ -81,6 +81,7 @@ jobs:
             test/transport-client-live.test.ts \
             test/orchestration-loop.test.ts \
             test/watchdog-repro.test.ts \
+            test/cancel-dispatch.test.ts \
             test/connector-live.test.ts \
             test/acp-adapter.test.ts \
             test/acp-kimi-live.test.ts
