@@ -158,6 +158,13 @@ export function normalizeSessionEvent(event: SessionEvent): RuntimeEvent {
 class AgentSessionHandle implements RuntimeHandle {
   readonly sessionId: string
   private state: DerivedWorkState = 'idle'
+  /**
+   * `cancel()` 是否已经发出过（feature-detect 后是否调用了底层 cancel 或 close）。
+   * 泵侧据此区分 `done(exit≠0)` 究竟是 cancel 优雅退出还是真系统失败：
+   *  - cancelInProgress === true → 视作 idle（成员回收）
+   *  - cancelInProgress === false → 视作 failed（按既有语义处理）
+   */
+  private cancelInProgress = false
 
   constructor(
     private readonly ctx: Context,
@@ -189,11 +196,79 @@ class AgentSessionHandle implements RuntimeHandle {
     await this.session.kill()
   }
 
+  /**
+   * 优雅取消 —— feature-detect 到底层 {@link AgentSession.cancel}：
+   *  - 有 `cancel` 方法 → 调用之；底层应当发出 `cancelled` 事件或 done(exit≠0)，
+   *    泵侧据此走 idle 路径（不会触发 failDispatch）。
+   *  - 无 `cancel` 方法（仅 native/legacy 会话）→ 降级到 `close()`，并设 30s 优雅
+   *    窗口；超时未结束再 `kill()`（best-effort）。
+   *
+   * 幂等：首次调用即置 `cancelInProgress`；后续重复调用直接返回（不再打底层，
+   * 防止看门狗 + 入口 + 外部调用三路叠加时协议 spam）。
+   * best-effort：内部失败（protocol error、close 抛错）一律吞掉，不向上抛，
+   * 让编排层的 failDispatch 节奏不被打断。
+   */
+  async cancel(): Promise<void> {
+    if (this.cancelInProgress) return
+    this.cancelInProgress = true
+    const sess = this.session as AgentSession & { cancel?: () => Promise<void> }
+    if (typeof sess.cancel === 'function') {
+      try {
+        await sess.cancel()
+        return
+      } catch {
+        // protocol-level 失败 → 仍走 close 兜底
+      }
+    }
+    // 兜底：close() + 30s 优雅窗口（不阻塞调用方）
+    void this.gracefulCloseWithTimeout(30_000)
+  }
+
+  /** 30s 优雅窗口：先 close()，超时则 kill()。best-effort。 */
+  private async gracefulCloseWithTimeout(timeoutMs: number): Promise<void> {
+    let timer: NodeJS.Timeout | undefined
+    try {
+      await Promise.race([
+        this.session.close(),
+        new Promise<void>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`graceful close timeout after ${timeoutMs}ms`)),
+            timeoutMs,
+          )
+        }),
+      ])
+    } catch {
+      try {
+        await this.session.kill()
+      } catch {
+        /* swallow */
+      }
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  /**
+   * 暴露取消标志 —— 仅供测试断言 pump 侧区分逻辑。生产路径不应读取此字段。
+   */
+  isCancelInProgress(): boolean {
+    return this.cancelInProgress
+  }
+
   /** 后台抽干底部会话事件，并据此驱动成员状态。 */
   private async pump(): Promise<void> {
     try {
       for await (const event of this.session.events) {
-        const derived = deriveWorkState(event)
+        // 泵侧区分：cancel-induced `done(exit≠0)` 应走 idle（成员回收），而非 failed
+        let derived = deriveWorkState(event)
+        if (
+          derived === 'failed' &&
+          this.cancelInProgress &&
+          event.type === 'done' &&
+          event.exitCode !== 0
+        ) {
+          derived = 'idle'
+        }
         if (derived && derived !== this.state) {
           this.state = derived
           this.emitStatus(derived, event)

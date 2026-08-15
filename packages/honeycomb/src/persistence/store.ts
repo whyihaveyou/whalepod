@@ -154,6 +154,23 @@ function applyFact(snapshot: HiveSnapshot, fact: HiveFact): void {
       }
       break
     }
+    case 'task-cancelled': {
+      // task-cancelled 是事实日志里「主动取消」的权威记录，区别于 task-updated
+      // （后者由 applyTask 写，触发自 status/canceled 改写）。两者叠加保证：
+      //  - 即使 applyTask 漏写 task-updated（如老 storage adapter 只写
+      //    status，不写 task-updated），task-cancelled 也足以把任务置 cancelled。
+      //  - 反之亦然：applyTask 写了 status='cancelled'，task-cancelled
+      //    仍记录 who/why/at 三个语义字段。
+      const task = snapshot.tasks.get(fact.taskId)
+      if (task) {
+        task.status = 'cancelled'
+        if (fact.memberId !== null) {
+          task.owner = fact.memberId
+        }
+        task.updatedAt = fact.at
+      }
+      break
+    }
     case 'message-created':
       snapshot.messages.set(fact.message.id, { ...fact.message })
       break

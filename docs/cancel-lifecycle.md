@@ -307,28 +307,28 @@ POST /hive/:hiveId/task/:taskId/cancel
 
 按 ROI 和依赖关系排：
 
-| 任务 | 范围 | 依赖 | ROI | 估时 |
-| --- | --- | --- | --- | --- |
-| ① RuntimeHandle.cancel?() + AgentSessionHandle.cancel() | runtime/registry.ts + runtime/agent-runtime.ts | 无 | 高（解锁所有下游） | 0.5 天 |
-| ② AgentSessionHandle pump 区分 cancel-induced done | runtime/agent-runtime.ts | ① | 中（任务事实层需要） | 0.3 天 |
-| ③ 编排循环 dispatch 看门狗调 cancel + 任务事实 cancelled 类型 | consumer/orchestration-loop.ts | ① | 高（把派工超时闭环做对） | 0.5 天 |
-| ④ 编排循环 cancelTask 入口 + emit 'cancelled' 事件 | consumer/orchestration-loop.ts | ① ③ | 中（用户/queen 主动 cancel） | 0.5 天 |
-| ⑤ native-runtime cancel 兼容 + 与编排-Pro 协调 | runtime/native-runtime.ts | ① native-runtime 收口 | 中（外部 DSH agent 也要能 cancel） | 1 天 |
-| ⑥ transport cancel 通道 | transport/ | #01a004b1-9056 决议 | 低（UI 才会用） | 1 天 |
-| ⑦ E2E 集成测试（dispatch watchdog → cancel → task-cancelled） | test/ | ①②③ | 高（回归防护） | 0.5 天 |
+| 任务 | 范围 | 依赖 | ROI | 估时 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ① RuntimeHandle.cancel?() + AgentSessionHandle.cancel() | runtime/registry.ts + runtime/agent-runtime.ts | 无 | 高（解锁所有下游） | 0.5 天 | ✅ 落地（含 RuntimeRegistry.trackHandle/cancelTask 便捷层） |
+| ② AgentSessionHandle pump 区分 cancel-induced done | runtime/agent-runtime.ts | ① | 中（任务事实层需要） | 0.3 天 | ✅ 落地（cancelInProgress 幂等去重 + 泵侧 idle 改写） |
+| ③ 编排循环 dispatch 看门狗调 cancel + 任务事实 cancelled 类型 | consumer/orchestration-loop.ts | ① | 高（把派工超时闭环做对） | 0.5 天 | ✅ 落地（HiveFact 新增 task-cancelled + store fold） |
+| ④ 编排循环 cancelTask 入口 + emit 'cancelled' 事件 | consumer/orchestration-loop.ts | ① ③ | 中（用户/queen 主动 cancel） | 0.5 天 | ✅ 落地（roster.cancelTask? / appendFact? 均 optional，向后兼容） |
+| ⑤ native-runtime cancel 兼容 + 与编排-Pro 协调 | runtime/native-runtime.ts | ① native-runtime 收口 | 中（外部 DSH agent 也要能 cancel） | 1 天 | ⏳ 等 native-runtime 收口 |
+| ⑥ transport cancel 通道 | transport/ | #01a004b1-9056 决议 | 低（UI 才会用） | 1 天 | ⏳ 等 #01a004b1-9056 |
+| ⑦ E2E 集成测试（dispatch watchdog → cancel → task-cancelled） | test/ | ①②③ | 高（回归防护） | 0.5 天 | ✅ 部分覆盖（test/cancel-dispatch.test.ts 23 例：①-④ 全链路单测；跨进程 E2E 待 ⑤⑥） |
 
 **总估时**：~4 天（不含 transport 决议等待）
 
-**立刻可做（无依赖）**：① ② ③ ④
+**立刻可做（无依赖）**：① ② ③ ④ —— ✅ 全部落地（任务 #01a0052c，test/cancel-dispatch.test.ts 23 例全绿）
 **等依赖**：⑤ 等 native-runtime 收口，⑥ 等 #01a004b1-9056
 
 ## 7. 验证
 
 完成后跑：
+- `pnpm tsx --test test/cancel-dispatch.test.ts`（✅ ①-④ 全链路：registry cancelTask / 胶水 feature-detect + cancelInProgress 泵侧区分 / 看门狗先 cancel 再 failDispatch / cancelTask 入口 + task-cancelled fold，23 例）
 - `pnpm tsx --test test/connector-cancel.test.ts`（⏳ 待连接器-Pro 交付，契约定锚；交付前不要触碰该文件）
-- `pnpm tsx --test test/agent-runtime.test.ts`（新增：cancel 胶水）
-- `pnpm tsx --test test/orchestration-loop.test.ts`（新增：dispatch watchdog → cancel 路径）
-- `pnpm tsx --test test/e2e-core.test.ts`（新增：cancelled 任务事实回归）
+- `pnpm tsx --test test/orchestration-loop.test.ts`（回归：既有派工算法未被 cancel 改动破坏）
+- `pnpm tsx --test test/persistence.test.ts`（回归：事实 fold 不受 task-cancelled 新词影响）
 
 ## 8. 已知限制 / 待办
 

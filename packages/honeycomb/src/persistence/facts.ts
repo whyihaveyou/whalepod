@@ -42,6 +42,7 @@ export type HiveFact =
   | { type: 'task-created'; task: Task; at: number }
   | { type: 'task-updated'; taskId: TaskId; patch: TaskPatch; at: number }
   | { type: 'task-dependency'; taskId: TaskId; blockedBy: TaskId; op: 'add' | 'remove'; at: number }
+  | { type: 'task-cancelled'; taskId: TaskId; memberId: MemberId | null; reason: string; at: number }
   | { type: 'message-created'; message: Message; at: number }
   | { type: 'message-read'; messageId: MessageId; at: number }
 

@@ -49,6 +49,7 @@ export type LoopEvent =
   | { type: 'retry'; hiveId: string; taskId: string; memberId: string; attempt: number }
   | { type: 'failed'; hiveId: string; taskId: string; memberId: string }
   | { type: 'dismissed'; hiveId: string; memberId: string; reason: string; taskId?: string }
+  | { type: 'cancelled'; hiveId: string; taskId: string; memberId: string | null; reason: string }
 
 /** 任务 → 成员的 capability 匹配谓词。缺省放行（不启用 capability 门禁）。 */
 export type CapabilityMatcher = (task: { requires?: string[] }, member: { capabilities?: string[] }) => boolean
@@ -80,6 +81,18 @@ export interface OrchestrationLoop {
   dispatchNow(hiveId: string): Promise<void>
   /** 订阅循环内部转移事件（测试/可观测）。 */
   onEvent(listener: (event: LoopEvent) => void): { dispose(): void }
+  /**
+   * 主动取消一个 in-progress 任务 —— 给 queen/外部调用方用的入口：
+   *  - 撤销挂着的派工看门狗（避免超时后 failDispatch 二次回收）；
+   *  - 把任务 status 置为 `cancelled`（区别于 failed 语义）；
+   *  - 写一条 `task-cancelled` 事实（区别于 `task-failed`）；
+   *  - 通过 `roster.cancelTask` 触发底层 30s 优雅窗口（fire-and-forget）；
+   *  - emit `cancelled` 事件；
+   *  - 重派扫描（其它 backlog 仍可继续派工）。
+   *
+   * 任务不在 in-progress 时（backlog/completed/failed/cancelled）一律 no-op。
+   */
+  cancelTask(hiveId: string, taskId: string, reason: string): Promise<void>
 }
 
 /** 编排循环的构造依赖（纯内存服务，全部可注入 stub 以单测）。 */
@@ -93,6 +106,13 @@ export interface OrchestrationLoopDeps {
       message: { role: string; content: string },
     ): Promise<boolean>
     dismiss(hiveId: string, memberId: string): Promise<void>
+    /**
+     * 优雅取消（可选） —— 触发底层 RuntimeHandle.cancel?()，
+     * 走 30s 优雅窗口（feature-detect session.cancel? → close 兜底）。
+     * 生产装配时由 RosterService 实现；测试可注入 stub。
+     * 编排循环永远 `void` fire-and-forget，不会 await 阻塞 failDispatch。
+     */
+    cancelTask?(hiveId: string, memberId: string): Promise<void>
   }
   ledger: {
     list(
@@ -104,6 +124,22 @@ export interface OrchestrationLoopDeps {
   applyTask(
     hiveId: string,
     patch: { taskId: string; status?: string; owner?: string | null },
+  ): Promise<void>
+  /**
+   * 追加一条事实到事实日志（可选）—— 用于编排层写入 `task-cancelled` 等
+   * 不走 ledger 的事件。生产装配时由 persistence 提供；测试可注入 stub。
+   * 不注入时：编排循环仍会写 status='cancelled'（走 applyTask）+ emit 事件，
+   * 只是不落 `task-cancelled` 事实行。
+   */
+  appendFact?(
+    hiveId: string,
+    fact: {
+      type: 'task-cancelled'
+      taskId: string
+      memberId: string | null
+      reason: string
+      at: number
+    },
   ): Promise<void>
   matchesCapability?: CapabilityMatcher
   config?: OrchestrationLoopConfig
@@ -120,6 +156,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     roster,
     ledger,
     applyTask,
+    appendFact,
     matchesCapability = () => true,
     config = {},
     now = Date.now,
@@ -274,7 +311,8 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
   }
 
   /** 看门狗到点：仅当任务仍在 in-progress 且 owner 仍是当初派工的 worker 时，路由到 failDispatch。
-   *  已被 report / idle-dismiss 回收的任务会被此守卫拒绝。 */
+   *  已被 report / idle-dismiss 回收的任务会被此守卫拒绝。
+   *  cancel 链路：先给底层 30s 优雅窗口（fire-and-forget），再走 failDispatch 回收。 */
   async function onDispatchTimeout(
     hiveId: string,
     task: LoopTask,
@@ -291,6 +329,15 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
       (t) => t.id === task.id && t.owner === worker.id,
     )
     if (!current) return
+
+    // 先给底层 30s 优雅窗口（fire-and-forget），不阻塞 failDispatch 回收节奏。
+    // 底层如果能在窗口内干净退出（cancelled 事件或 done(exit=0)），理想情况
+    // handleReport 会走 completed 路径；否则到点我们仍按 failDispatch 重派。
+    if (roster.cancelTask) {
+      void roster.cancelTask(hiveId, worker.id).catch(() => {
+        /* best-effort：吞掉 cancel 失败，让 failDispatch 继续 */
+      })
+    }
 
     await failDispatch(hiveId, current, worker, attempt)
   }
@@ -406,6 +453,54 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
           if (i >= 0) eventListeners.splice(i, 1)
         },
       }
+    },
+    /**
+     * 主动取消 in-progress 任务 —— 编排层 cancel 入口。
+     * 任务非 in-progress 时一律 no-op（不抛错，符合 idempotent cancel）。
+     */
+    async cancelTask(hiveId: string, taskId: string, reason: string) {
+      const owned = await ledger.list(hiveId, { status: 'in-progress' })
+      const task = owned.find((t) => t.id === taskId)
+      if (!task) return
+      const memberId = task.owner
+      const at = now()
+
+      // 1. 撤销挂着的派工看门狗（避免超时后 failDispatch 二次回收）
+      disarmDispatchWatchdog(taskId)
+
+      // 2. 任务状态置 cancelled（区别于 failed）—— applyTask 内部会写 task-updated 事实
+      await applyTask(hiveId, { taskId, status: 'cancelled', owner: null })
+
+      // 3. 写一条 task-cancelled 事实（可选 dep；不注入时仍走 status + 事件路径）
+      if (appendFact) {
+        try {
+          await appendFact(hiveId, {
+            type: 'task-cancelled',
+            taskId,
+            memberId,
+            reason,
+            at,
+          })
+        } catch {
+          /* best-effort：事实落库失败不影响编排状态 */
+        }
+      }
+
+      // 4. 清理重派计数（已 cancelled 的任务不该被重派）
+      attempts.delete(taskId)
+
+      // 5. emit 'cancelled' 事件
+      emitLoopEvent({ type: 'cancelled', hiveId, taskId, memberId, reason })
+
+      // 6. fire-and-forget 触发底层 30s 优雅窗口
+      if (memberId && roster.cancelTask) {
+        void roster.cancelTask(hiveId, memberId).catch(() => {
+          /* swallow */
+        })
+      }
+
+      // 7. 重派扫描 —— 其它 backlog 仍可继续派工
+      await dispatchFor(hiveId)
     },
   }
 }
