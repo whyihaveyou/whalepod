@@ -2,7 +2,7 @@
 
 > 交接范围：**仅限「版本分发与网站建设」**。开发与缺陷修复继续由原开发团队（Aion CLI 团队）负责，接收方不需要、也不应改动任何源码或重新构建。本报告随可作为网站运营/分发 Agent 的工作输入直接使用。
 
-## 一、交付物（本报告对应的唯一出货工件）
+## 一、交付物（主推档 = Full 全家桶；Slim 轻量档见「一·五 版本矩阵」）
 
 | 项 | 值 |
 | --- | --- |
@@ -13,7 +13,49 @@
 | 代码基线 | commit `ff4039b`（含 Bug#3 修复，2026-08-15） |
 | 建议对外版本号 | `v0.1.0-alpha.2`（当前最新；每日小版本节奏更新） |
 
-**dist/ 目录下的 `HarnessShell.zip`（850KB）是旧骨架残留，严禁对外分发，只用上述 DMG。**
+**dist/ 目录下的 `HarnessShell.zip`（850KB）是旧骨架残留，严禁对外分发，只用上文 DMG。**
+
+> 👉 主推 Full DMG；想要轻量的开发者请看下文「一·五 版本矩阵」的 Slim ZIP。
+
+## 一·五、版本矩阵（2026-08-15 起双档发布，两档代码同源）
+
+> 依据 `docs/version-tiers.md`。两档的壳代码、配置/深链/单实例/崩溃退避/日志**完全一致**，
+> 唯一差异是 `.app` 内是否内嵌 Node + dsh（Full 内嵌 / Slim 靠本机 npx）。
+
+| 维度 | **Full 全家桶版**（默认主推） | **Slim 轻量版**（开发者） |
+| --- | --- | --- |
+| 目标用户 | 普通/测试用户 | 已装 Node 的开发者 |
+| 前置依赖 | **无**（免装零依赖） | Node ≥ 22（建议 22.19+） |
+| 体积 | ≈ 214 MB（DMG） | ≈ 1.1 MB（ZIP） |
+| 首启体验 | 开箱即用，直接进界面 | 首次 npx 拉取 dsh（一次性 ~90MB 入 `~/.npm`，此后走缓存） |
+| 无 Node 时 | —（自带） | 降级为 unavailable 指引文案（明确报错 + 安装提示，不崩不空转） |
+| 探测链命中 | P1 `bundled` | P3 `npxFallback`（无 node 则 `unavailable`） |
+| 产物命名 | `WhalePod-<ver>-macos-arm64-full.dmg` | `WhalePod-<ver>-macos-arm64-slim.zip` |
+
+### 当前两个工件 + 校验值（v0.1.0 / 基线 `ff4039b`）
+
+| 档 | 文件 | 大小 | SHA-256 |
+| --- | --- | --- | --- |
+| Full | `HarnessShell/dist/HarnessShell.dmg` | 224,252,627 B（≈214MB） | `2dd5baec32502070ac157908ae9975283fbed42f86a2c6ddc346d46c0a31db1d` |
+| Slim | `HarnessShell/dist/WhalePod-0.1.0-macos-arm64-slim.zip` | 1,154,947 B（≈1.1MB） | `cedf797bacf2cef9e3fc6178377f5fe4a52bb7e657fefdd449d5e145309ed8a1` |
+
+> ⚠️ SHA-256 随每次构建变化，本节为**当时发布快照**；日常发布请以构建日志/make-slim.sh 输出为准。
+
+### 安装指引（放网站两栏展示）
+
+**—— 普通用户 → 选 Full DMG ——**
+
+1. 下载 `HarnessShell.dmg`，双击挂载，把 `HarnessShell.app` 拖入「应用程序」。
+2. ad-hoc 签名：首次打开**右键 App → 打开** → 弹窗「打开」；或 系统设置 → 隐私与安全性 → 「仍要打开」。
+3. 无需装任何东西，直接进 DeepSeek Harness Web 界面。
+
+**—— 开发者 → 选 Slim ZIP ——**
+
+1. 确认已装 Node ≥ 22：`node -v`。
+2. 解压 `WhalePod-0.1.0-macos-arm64-slim.zip`，拖出 `HarnessShell.app`。
+3. 同上处理 Gatekeeper 后打开；首启自动 `npx --yes @deepseek-ai/dsh@<ver> web` 拉取退化运行时（HTTP 200 即成功）。
+4. 没装 Node 想用 Slim？壳会提示安装 Node 而不是崩溃/空转；想走源码模式可在
+   `~/Library/Application Support/WhalePod/config.json` 填 `command`（见第六节开发者自定义）。
 
 ## 二、这个版本是什么
 
