@@ -91,7 +91,7 @@ test('jsonl: corrupted lines are skipped and warned, never abort startup', async
   // ① invalid JSON, ② missing `seq`, ③ unknown fact type, ④ truncated line.
   const corrupted =
     original.split('\n')[0] + '\n' + 'this is not json\n' +
-    '{"seq":99,"at":9,"hiveId":"hive_bad","fact":{"type":"task-created","task":{"id":"t"}}}\n' +
+    '{"at":9,"hiveId":"hive_bad","fact":{"type":"task-created","task":{"id":"t"}}}\n' +
     '{"seq":3,"at":3,"hiveId":"hive_bad","fact":{"type":"future-unknown-type","x":1}}\n' +
     '{truncated\n' +
     original.split('\n').filter(Boolean).slice(1).join('\n') + '\n'
@@ -106,7 +106,10 @@ test('jsonl: corrupted lines are skipped and warned, never abort startup', async
   assert.equal(store.hive(hiveId)?.name, 'A')
   assert.equal(store.member('m1')?.role, 'queen')
   assert.equal(warnings.length, 1, 'one warning for the single hive file replayed in full, despite 4 corrupt lines')
-  assert.ok(warnings[0]!.includes('skipped') && warnings[0]!.includes('4'), 'warning reports the 4 skipped corrupt lines')
+  assert.ok(
+    warnings[0]!.includes('skipped 4 corrupt line'),
+    `warning reports the 4 skipped corrupt lines; got: ${JSON.stringify(warnings)}`,
+  )
 })
 
 test('jsonl: missing log file → empty replay (first run)', async () => {
