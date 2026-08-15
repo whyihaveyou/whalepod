@@ -21,15 +21,19 @@ related: 01a0051d-be36-7b70-80f4-e32326f10e02
 | `AcpSession.cancel()` 真实现（发 `connection.cancel({ sessionId })`） | ✅ | f89a70d |
 | `deriveWorkState('cancelled') → 'idle'` 映射 | ✅ | f1c0e48 (leader 的 typecheck fix) |
 | `normalizeSessionEvent('cancelled') → RuntimeEvent.cancelled` | ✅ | f1c0e48 |
-| 契约 feature-detect 测试（4 stdio 无 cancel / AcpSession 有 cancel） | ✅ | `test/connector-cancel.test.ts` |
+| 契约 feature-detect 测试（4 stdio 无 cancel / AcpSession 有 cancel） | ⏳ WIP（连接器-Pro in-flight，未提交）| 预期 `test/connector-cancel.test.ts`；交付后 §7 任务 ① 的「降级分支」才被锁住 |
+| 16/16 整套确定性测试（无 cancel 路径回归） | ✅ | 111f45a CI 绿 |
+| live kimi acp 端到端（包含 cancel） | ✅ | d10f2b6 RUN_ACP_LIVE=1 opt-in |
 
-**未做**：
+**未做（本文档要解决的范围）**：
 - `RuntimeHandle.cancel?()`（runtime/registry.ts）
 - `AgentSessionHandle` 把 cancel 透传到底层 session 的胶水
 - 编排循环的「dispatch 看门狗到点时」是否触发 cancel
 - 任务事实层区分 `cancelled`（用户/编排主动）vs `failed`（系统故障）
 - transport 侧的 cancel REST/WS 通道（等 #01a004b1-9056 决议）
 - native-runtime 路径的 cancel（编排-Pro 收尾 native-runtime 后协调）
+
+**设计闭环条件**：连接器-Pro 的契约 feature-detect 测试交付后，本设计表的「降级分支」才被真锁住；交付前的实现是「按契约设计稿」施工。
 
 ## 1. 设计目标
 
@@ -321,7 +325,7 @@ POST /hive/:hiveId/task/:taskId/cancel
 ## 7. 验证
 
 完成后跑：
-- `pnpm tsx --test test/connector-cancel.test.ts`（已有：契约 feature-detect 永绿）
+- `pnpm tsx --test test/connector-cancel.test.ts`（⏳ 待连接器-Pro 交付，契约定锚；交付前不要触碰该文件）
 - `pnpm tsx --test test/agent-runtime.test.ts`（新增：cancel 胶水）
 - `pnpm tsx --test test/orchestration-loop.test.ts`（新增：dispatch watchdog → cancel 路径）
 - `pnpm tsx --test test/e2e-core.test.ts`（新增：cancelled 任务事实回归）
