@@ -20,21 +20,26 @@
  * @module @dfh/honeycomb/consumer/orchestration-loop
  */
 
-import type { Context } from '../framework'
+import type { Context } from '@deepseek-ai/cordis'
 
 /**
- * 编排循环配置。`idleTimeoutMs` / `maxDispatchAttempts` 在装配时可覆盖；
- * 未显式给定时用下列默认值（设计文档 §10）。
+ * 编排循环配置。`idleTimeoutMs` / `maxDispatchAttempts` / `dispatchTimeoutMs`
+ * 在装配时可覆盖；未显式给定时用下列默认值（设计文档 §10）。
  */
 export interface OrchestrationLoopConfig {
   /** 成员 idle 超时（ms）自动 dismiss；0 表示不启用自动 dismiss。 */
   idleTimeoutMs?: number
   /** 单个任务最大派工/重派次数，超过则回滚为 failed。 */
   maxDispatchAttempts?: number
+  /** 单次派工后等待 worker 回 report / error 的超时（ms）。
+   *  到点未回 → 视同 sendTo 失败，走 `failDispatch` 重派/回滚。
+   *  0 或负数表示不启用看门狗。 */
+  dispatchTimeoutMs?: number
 }
 
 export const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000 // 15 min
 export const DEFAULT_MAX_DISPATCH_ATTEMPTS = 3
+export const DEFAULT_DISPATCH_TIMEOUT_MS = 5 * 60_000 // 5 min
 
 /** 循环内部状态转移的可观察事件（给测试/监控用，不污染全局事件表）。 */
 export type LoopEvent =
@@ -124,6 +129,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
 
   const idleTimeoutMs = config.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
   const maxDispatchAttempts = config.maxDispatchAttempts ?? DEFAULT_MAX_DISPATCH_ATTEMPTS
+  const dispatchTimeoutMs = config.dispatchTimeoutMs ?? DEFAULT_DISPATCH_TIMEOUT_MS
 
   const listeners: Array<() => void> = [] // 订阅释放器（ctx.on 返回 `() => void`，interval 同理）
   const eventListeners: Array<(e: LoopEvent) => void> = []
@@ -135,6 +141,10 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
   const lastDispatchedAt = new Map<string, number>() // memberId → 上次派工时间戳
   const lastActivityAt = new Map<string, number>() // memberId → 上次活跃时间戳
   const trackedHives = new Set<string>()
+  // 派工看门狗：每个 in-progress 任务挂一个超时定时器；到点走 failDispatch。
+  // 这是「sendTo 成功但 runtime 永不复命」的唯一回收入口（见 test/watchdog-repro.test.ts）。
+  const dispatchWatchdogs = new Map<string, unknown>() // taskId → setTimer 返回的句柄
+  const dispatchOwners = new Map<string, string>() // taskId → 当前 watchdog 关联的 worker.memberId
 
   function emitLoopEvent(e: LoopEvent): void {
     for (const fn of eventListeners) fn(e)
@@ -145,7 +155,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     started = true
 
     // 新任务 → 尝试派工
-    listeners.push(ctx.on('task/created', (p: { task: LoopTask }) => {
+    listeners.push(ctx.on('task/created', (p: { task: { hiveId: string } }) => {
       void dispatchFor(p.task.hiveId)
     }))
 
@@ -162,7 +172,7 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     }))
 
     // 任务更新（依赖解除 / 状态变化）→ 重扫
-    listeners.push(ctx.on('task/updated', (p: { task: LoopTask }) => {
+    listeners.push(ctx.on('task/updated', (p: { task: { hiveId: string } }) => {
       void dispatchFor(p.task.hiveId)
     }))
 
@@ -218,16 +228,70 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     })
 
     if (!sent) {
+      // 派工即失败：先撤销（可能存在的）看门狗，再走 failDispatch。
+      disarmDispatchWatchdog(task.id)
       await failDispatch(hiveId, task, worker, attempt)
       return
     }
 
     emitLoopEvent({ type: 'dispatched', hiveId, taskId: task.id, memberId: worker.id, attempt })
+    // 派工成功：挂看门狗。报告或失败到达时会撤销。
+    armDispatchWatchdog(hiveId, task, worker, attempt)
   }
 
   function buildDirective(task: LoopTask, attempt: number): string {
     const marker = attempt > 1 ? ` (重派 #${attempt})` : ''
     return `执行任务 ${task.id}: ${task.id}${marker}`
+  }
+
+  // ---------- 派工看门狗 ----------
+
+  /** 挂一个 per-task 派工超时定时器；到点视同 sendTo 失败走 failDispatch。
+   *  这是处理「runtime 在线接收但不回 report」唯一回收入口。 */
+  function armDispatchWatchdog(
+    hiveId: string,
+    task: LoopTask,
+    worker: LoopMember,
+    attempt: number,
+  ): void {
+    if (dispatchTimeoutMs <= 0) return
+    // 同一任务不重复挂（保险：dispatchTo / 重派本身不会出现同 task 二次挂的情况，但幂等更稳）。
+    if (dispatchWatchdogs.has(task.id)) disarmDispatchWatchdog(task.id)
+    const handle = setTimer(() => {
+      void onDispatchTimeout(hiveId, task, worker, attempt)
+    }, dispatchTimeoutMs)
+    dispatchWatchdogs.set(task.id, handle)
+    dispatchOwners.set(task.id, worker.id)
+  }
+
+  function disarmDispatchWatchdog(taskId: string): void {
+    const h = dispatchWatchdogs.get(taskId)
+    if (h !== undefined) {
+      clearTimer(h)
+      dispatchWatchdogs.delete(taskId)
+    }
+    dispatchOwners.delete(taskId)
+  }
+
+  /** 看门狗到点：仅当任务仍在 in-progress 且 owner 仍是当初派工的 worker 时，路由到 failDispatch。
+   *  已被 report / idle-dismiss 回收的任务会被此守卫拒绝。 */
+  async function onDispatchTimeout(
+    hiveId: string,
+    task: LoopTask,
+    worker: LoopMember,
+    attempt: number,
+  ): Promise<void> {
+    // 清理句柄自身（setTimer 回调已触发）
+    dispatchWatchdogs.delete(task.id)
+    dispatchOwners.delete(task.id)
+
+    // 任务可能已被 report / sweepIdle 回收 —— 不再二次 failDispatch。
+    const current = (await ledger.list(hiveId, { status: 'in-progress' })).find(
+      (t) => t.id === task.id && t.owner === worker.id,
+    )
+    if (!current) return
+
+    await failDispatch(hiveId, current, worker, attempt)
   }
 
   // ---------- 交付闭环 ----------
@@ -238,6 +302,8 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     const task = owned.find((t) => t.owner === memberId)
     if (!task) return
 
+    // 报告到达：撤销挂着的看门狗（关键步骤 — 否则到点会误回收）。
+    disarmDispatchWatchdog(task.id)
     await applyTask(hiveId, { taskId: task.id, status: 'completed' })
     attempts.delete(task.id)
     emitLoopEvent({ type: 'completed', hiveId, taskId: task.id, memberId })
@@ -265,6 +331,9 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
   // ---------- 失败重派 / 回滚 ----------
 
   async function failDispatch(hiveId: string, task: LoopTask, worker: LoopMember, attempt: number): Promise<void> {
+    // 任何派工失败路径（sendTo=false 或 watchdog 到点）都先撤销看门狗。
+    disarmDispatchWatchdog(task.id)
+
     if (attempt >= maxDispatchAttempts) {
       // 已达上限：放弃该任务，emit failed 并回滚到未派工（退回 backlog、清 owner）。
       // 注：TaskStatus 枚举无 'failed'，故回滚用 backlog + owner=null 表达"失败回滚"。
@@ -295,6 +364,8 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
         const task = owned.find((t) => t.owner === member.id)
         if (task) {
           attempts.delete(task.id)
+          // idle dismiss 也撤销看门狗（worker 已被踢，不应继续计时）。
+        disarmDispatchWatchdog(task.id)
           await applyTask(hiveId, { taskId: task.id, owner: null, status: 'backlog' })
           emitLoopEvent({ type: 'dismissed', hiveId, memberId: member.id, reason: 'idle-timeout', taskId: task.id })
         } else {
@@ -316,6 +387,10 @@ export function createOrchestrationLoop(deps: OrchestrationLoopDeps): Orchestrat
     stop() {
       for (const l of listeners) l()
       listeners.length = 0
+      // 撤销所有挂着的派工看门狗，避免停机后回调继续生效。
+      for (const h of dispatchWatchdogs.values()) clearTimer(h)
+      dispatchWatchdogs.clear()
+      dispatchOwners.clear()
       timerHandle = undefined
       started = false
     },
