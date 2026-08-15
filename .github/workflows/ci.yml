@@ -21,7 +21,7 @@ jobs:
   # runner：ubuntu-latest（免费、快速，纯 Node 测试无需 macOS）
   # ============================================================================
   honeycomb-tests:
-    name: Honeycomb tests (typecheck + smoke + 8 deterministic + 2 live skip)
+    name: Honeycomb tests (typecheck + smoke + deterministic suite, live auto-skip)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,7 +31,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # v10：与本机 10.16.1 对齐（pnpm-lock.yaml 由 v10 生成；v9 解析 v10 锁会误判 out-of-date）
+          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,9 +43,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/honeycomb
-        # 不加 --frozen-lockfile：保证 lockfile 未提交时也能跑通；上线后建议改回
-        # pnpm 9 无 --no-audit/--no-fund CLI 旗标（npm 风格）,audit/fund 走 config 键
-        run: pnpm install
+        # frozen-lockfile：CI 必须可复现安装；lockfile 与 manifest 漂移直接红。
+        # lockfile 现已随仓锁定提交（v10 生成），venv 假设已成立。
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         working-directory: packages/honeycomb
@@ -54,7 +55,7 @@ jobs:
         working-directory: packages/honeycomb
         run: pnpm run test
 
-      - name: 'Run deterministic test suite (12 files: smoke + e2e + persistence + transport + orchestration + connector + acp + native-runtime)'
+      - name: 'Run deterministic test suite (11 pinned + native-runtime 条件纳入; live 自动 skip)'
         working-directory: packages/honeycomb
         run: |
           set -euo pipefail
@@ -65,9 +66,6 @@ jobs:
           #   - transport-client-live : 需 server 可达，CI 无外部 deps 会因 connect 失败自动 skip
           #   - connector-live        : opencode 未安装 → 内部 t.skip 命中（recorded+mock 部分仍跑）
           #   - acp-adapter live 子集 : 同上（mock 部分 + 纯函数 100% 跑）
-          #
-          # native-runtime.test.ts 由 架构-Pro 即将提交（task #01a000cd-97ba 系列），
-          # 本地已就位但尚未 push origin；list 加上保证 native-runtime PR 一合并即跑。
           #
           # 顺序按「先快后慢」编排：纯函数（persistence/e2e-core）→ transport →
           # orchestration → connector → adapter；live 的放最后即便 skip 也消耗最小 wall time。
@@ -82,8 +80,15 @@ jobs:
             test/orchestration-loop.test.ts \
             test/watchdog-repro.test.ts \
             test/connector-live.test.ts \
-            test/acp-adapter.test.ts \
-            test/native-runtime.test.ts
+            test/acp-adapter.test.ts
+          # native-runtime.test.ts 由编排线即将合入（task #01a000cd-97ba 系列）；
+          # 显式列进上面的 --test 清单时若文件缺席会直接 MODULE_NOT_FOUND 红掉，
+          # 故存在才跑——合入后自动纳入，无需再改本文件。
+          if [ -f test/native-runtime.test.ts ]; then
+            node --import tsx --test test/native-runtime.test.ts
+          else
+            echo "::notice::native-runtime.test.ts 未合入，本轮跳过（文件出现后自动纳入）"
+          fi
 
       - name: Upload coverage & logs on failure
         if: failure()
