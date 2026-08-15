@@ -61,10 +61,12 @@ export type DerivedWorkState = 'working' | 'finished' | 'failed' | 'idle'
  *
  * 返回供调用方驱动 `member/work-state` 转移用的状态：
  *  - `stream` / `tool-call` / `approval-request` → **working**
- *  - `tool-result`             → working（工具执行结果仍在工作上下文内）
+ *  - `tool-result` / `image`   → working（工具结果 / 图片帧仍在工作上下文内）
  *  - `done`（exitCode === 0）  → **finished**
  *  - `done`（exitCode !== 0）  → **failed**
  *  - `error`                   → **failed**
+ *  - `cancelled`               → **idle**（会话被取消，成员回收）
+ *  - 未知新变体（default）     → 不改变状态（保证变体扩展不破坏编译）
  *
  * @returns `null` 表示该事件不改变工作状态。
  */
@@ -74,11 +76,16 @@ export function deriveWorkState(event: SessionEvent): DerivedWorkState | null {
     case 'tool-call':
     case 'tool-result':
     case 'approval-request':
+    case 'image':
       return 'working'
     case 'done':
       return event.exitCode === 0 ? 'finished' : 'failed'
     case 'error':
       return 'failed'
+    case 'cancelled':
+      return 'idle'
+    default:
+      return null
   }
 }
 
@@ -125,10 +132,23 @@ export function normalizeSessionEvent(event: SessionEvent): RuntimeEvent {
       return { type: 'tool-result', payload: { id: event.id, content: event.content } }
     case 'approval-request':
       return { type: 'approval-request', payload: { id: event.id, prompt: event.prompt } }
+    case 'image':
+      return {
+        type: 'image',
+        payload: { source: event.source, toolCallId: event.toolCallId, mimeType: event.mimeType, data: event.data },
+      }
+    case 'cancelled':
+      return { type: 'cancelled' }
     case 'done':
       return { type: 'done', payload: { exitCode: event.exitCode } }
     case 'error':
       return { type: 'error', payload: { message: event.message } }
+    default: {
+      // 未来新增 SessionEvent 变体：应在此之上补显式映射；兜底做松散透传，
+      // 保证变体扩展不会让本函数丢掉 ending return（RuntimeEvent 本身是松散形状）。
+      const unknown = event as { type: string }
+      return { type: unknown.type, payload: unknown }
+    }
   }
 }
 
