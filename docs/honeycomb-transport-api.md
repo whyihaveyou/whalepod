@@ -4,7 +4,7 @@
 > 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
-> 状态：设计稿 v1（定稿）
+> 状态：设计稿 v1（定稿）· 2026-08-16 契约对账修订（v1.1，以源码为准微调，见 §0 注记）
 > 前置文档：[honeycomb-orchestration-architecture.md](./honeycomb-orchestration-architecture.md)（服务接口 DTO 定义见其 §5/§6）、[honeycomb-orchestration-loop.md](./honeycomb-orchestration-loop.md)
 > 位置：`packages/honeycomb/src/transport/`
 > 下游读者：实现-Pro-3（React 前端对接本 API surface）
@@ -23,6 +23,8 @@ honeycomb 目前只有**进程内 service + 事件**，没有面向前端（Reac
 1. **Transport 是「薄适配层」**。它不实现业务逻辑，只做「URL/消息 → 服务方法」的翻译。所有数据形态直接复用 `types.ts` 里的 DTO 与领域模型，不新增第二套 JSON 结构。
 2. **REST / WS 共享同一套「资源路径」词汇**。REST 端点路径与 WS 订阅主题共用一组资源名（`hive` / `member` / `task` / `message` / `activity`），前端学一次即可。
 3. **内存版骨架不接真实网络栈**。本包不含 koa/express/ws 依赖；transport 定义一组**端口接口（Port）**（`HttpAdapter` / `WsAdapter`），内存版用「内存路由 + 内存订阅中心」实现，真实网络适配器（Node http + ws，或主进程桥）在接入端注入。这样接口先行、可编译、签名清晰，符合「内存版实现骨架」的交付要求。
+
+> 落地增量注记（契约对账 2026-08-16）：内存 Port 之外，仓库已提供 **Node http+ws 适配器**（`transport/server.ts`，含 `options.transport.orchestration` 透传）与**类型化客户端 SDK**（`transport/client.ts` + `client-types.ts`）——均为 Port 之上的适配实现，本 surface 契约不变。
 
 ---
 
@@ -114,6 +116,8 @@ export interface WsAdapter {
 
 ## 3. REST 端点清单（Endpoint Catalog）
 
+> 共 32 端点：hive 7（§3.1）+ member 8（§3.2）+ task 7（§3.3）+ 编排 cancel 1（§3.4）+ message 6（§3.5）+ mandate 3（§3.6）。
+>
 > 约定：
 > - 路径参数用 `{id}` 占位。
 > - 查询参数 `?filter=...` 的取值使用 JSON 编码（避免复杂嵌套），例如 `?filter={"status":"backlog","runnable":true}`。
@@ -176,12 +180,12 @@ export interface WsAdapter {
 | 任务状态 | 结果 |
 | --- | --- |
 | 不存在 | `409 TASK_NOT_FOUND` |
-| `in-progress`（在途） | 调 `orchestration.cancelTask：` 看门狗 disarm + applyTask(cancelled) + `task-cancelled` 事实 + `roster.cancelTask` 优雅通道（fire-and-forget 30s 窗口）+ 重派扫描 → `202` + 快照。**编排循环未挂钩本 transport** → `503 ORCHESTRATION_UNAVAILABLE` |
+| `in-progress`（在途） | 调 `orchestration.cancelTask`：看门狗 disarm + applyTask(cancelled) + `task-cancelled` 事实 + `roster.cancelTask` 优雅通道（fire-and-forget 30s 窗口）+ 重派扫描 → `202` + 快照。**编排循环未挂钩本 transport** → `503 ORCHESTRATION_UNAVAILABLE` |
 | `cancelled`（重复调用） | **幂等**：`202` + 当前快照；不再二次写事实 / 不再二次触发底层 cancel（事实里的 reason 恒为首次） |
 | `completed`（终态） | `409 TASK_TERMINAL`（注：TaskStatus 词表无 `failed` —— 失败语义走任务事实/事件侧，快照终态仅 completed / cancelled 二态） |
 | `backlog` / `blocked`（未在途） | `409 TASK_NOT_RUNNING` —— 本端点只取消在途任务；出队类取消请用 `PATCH /v1/hives/{hiveId}/tasks/{id}` 直接置 `cancelled`（不产 task-cancelled 事实，适合「未派工就作废」） |
 
-**WS 联动**（无新消息类型，复用事实广播链）：cancel 成功后订阅端从既有 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时的成员 work-state 回落则走既有 `member/work-state` 帧（编排 Pro/native-runtime 链路收口后自然到达）。
+**WS 联动**（无新消息类型，复用事实广播链）：cancel 成功后订阅端从既有 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时的成员 work-state 回落则走既有 `member/work-state` 帧（链路已落地：编排 ⑤ 真实现 + ⑦ E2E `test/cancel-e2e-acp/-native/-stdio/-rest.test.ts` 全绿验证，见 `docs/cancel-lifecycle.md`）。
 
 ### 3.5 `message`（信使 → `CourierService`）
 
@@ -225,6 +229,19 @@ export interface WsAdapter {
 { "type": "hello", "client": "panel", "version": 1 }
 ```
 
+每条指令（hello 为幂等探查）服务端均回一帧 ACK（`subscribe.ts` 实现为准）：
+
+```jsonc
+// subscribe →
+{ "type": "subscribed", "hiveId": "hive_xxx" }
+
+// unsubscribe →
+{ "type": "unsubscribed", "hiveId": "hive_xxx" }
+
+// hello →
+{ "type": "hello", "ok": true }
+```
+
 ### 4.2 服务端 → 客户端（事件帧）
 
 统一包一层，便于前端统一分发：
@@ -261,7 +278,7 @@ transport 订阅 honeycomb 的**全部 emit 事件**（`Events` 合并表），�
 - 带完整对象（如 `{ hive }`、`{ task }`、`{ message }`）→ 取对象的 `hiveId`；
 - `hive/created` 推给订阅 `"*"`（广播）的连接与即将存在的 hive；`hive/removed` 推给原订阅者。
 
-**cancel 路径复用本表（无新 topic）**：`POST /v1/tasks/{id}/cancel`（§3.4）成功后，订阅端从 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时成员 work-state 回落走既有 `member/work-state` 帧（⑤ native-runtime 收口后自然到达）。
+**cancel 路径复用本表（无新 topic）**：`POST /v1/tasks/{id}/cancel`（§3.4）成功后，订阅端从 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时成员 work-state 回落走既有 `member/work-state` 帧（链路已落地，⑦ E2E 全绿验证）。
 
 ### 4.4 跨 hive 广播
 
@@ -336,6 +353,22 @@ packages/honeycomb/src/transport/
 1. **REST 端点**：按 §3 清单调用查询/变更，响应 `{ ok, data }` / `{ ok:false, error }`。
 2. **WS 事件流**：连接 `/ws`，发 `subscribe {hiveId}`，收 `event{topic,hiveId,payload}` 帧；事件 payload 结构 = `types.ts` 领域对象。
 3. **类型共享**：transport 复用 `@whalepod/honeycomb/types` 的全部 DTO；前端可 `import type` 共享类型，无需自行定义第二套。
+
+### 8.1 Client SDK 对标（`@whalepod/honeycomb` transport/client.ts）
+
+源码导出的 `createHoneycombClient(options)` 返回 `HoneycombClient`（`client-types.ts`），对本 surface 的覆盖如下：
+
+| surface | client 覆盖 | 状态 |
+| --- | --- | --- |
+| §3.1 hive 域（7 端点） | `client.hive.*` 7 方法（list/get/create/rename/setMode/setSessionMode/remove） | ✅ |
+| §3.2 member 域（8 端点） | `client.member.*` 8 方法（list/get/state/register/hatch/dismiss/rename/remove） | ✅ |
+| §3.3 task 域（7 端点） | `client.task.*` 7 方法（list/get/create/update/setOwner/addDependency/removeDependency） | ✅ |
+| §3.4 编排 cancel（1 端点） | **未暴露 `task.cancel`**（README client 节已注明：服务端已注册端点，`task.cancel` 方法随 transport 通道落地后一并补封装） | ✗（唯一缺口，已知） |
+| §3.5 message 域（6 端点） | `client.message.*` 6 方法（send/deliver/inbox/markRead/broadcast/feed） | ✅ |
+| §3.6 mandate 域（3 端点） | `client.mandate.*` 3 方法（can/assert/grants；assert 失败抛 `HoneycombTransportError`） | ✅ |
+| §4 WS 订阅流 | `connect/subscribe/unsubscribe/on/close/connected`；`on(topic)` 的 topic 键 = 事件层 `HiveEventMap`（§4.3 全 11 topic，含补订 ack 等待与断线退避重连） | ✅ |
+
+合计 31/32 REST 端点已封装；唯一缺口为 §3.4 的 `POST /v1/tasks/{id}/cancel`，前端如需停止按钮可先行裸 fetch 该端点，或等 client 补充封装。
 
 **本任务（架构-Pro-1）交付**：
 - 本文档（API surface 定稿）；
