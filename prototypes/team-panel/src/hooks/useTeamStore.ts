@@ -31,7 +31,24 @@ export class TeamStore {
  *   cordis 迁移 + 真 server 联调绿后可传 httpUrl/wsUrl 切真连接，见 honeycombApi.ts 头注）；
  * - 缺省 mock，保证原型独立可跑。
  */
+/**
+ * 注入真实后端（dsh client plugin 用）。
+ * 面板装进真实 dsh web 时，插件在渲染三视图前先 `setTeamApiOverride(realApi)`，
+ * 把 `_instance` 指向真实 `createHoneycombClient` 后端（动态解析 hiveId，不 mock）。
+ * 已在原型里跑着的实例会就地重建（`_instance = null`，下次 useTeamApi() 用 override 重建）。
+ * 传 null 恢复 env/mock 默认。
+ */
+let _override: TeamApi | null = null;
+export function setTeamApiOverride(api: TeamApi | null): void {
+  _override = api;
+  _instance = null;
+}
+export function getTeamApiOverride(): TeamApi | null {
+  return _override;
+}
+
 function buildApi(): TeamApi {
+  if (_override) return _override;
   const env = import.meta.env;
   if (env.VITE_TEAM_API === "honeycomb") {
     return createHoneycombApi({

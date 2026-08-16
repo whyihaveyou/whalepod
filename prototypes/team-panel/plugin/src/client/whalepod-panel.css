@@ -1,0 +1,122 @@
+/* ui-whalepod-team — overlay + 触发器样式（作用域限定，只用 --dsw-* 皮肤 token） */
+
+.wp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--dsw-alias-border-default, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, inherit);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wp-trigger:hover {
+  background: color-mix(in srgb, var(--dsw-alias-bg-elevated, #fff) 60%, transparent);
+  color: var(--dsw-alias-label-primary, inherit);
+}
+.wp-trigger-slim {
+  padding: 4px 6px;
+}
+.wp-trigger-glyph {
+  color: var(--dsw-alias-brand-primary, currentColor);
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ---- overlay ---- */
+.wp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.wp-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, rgba(0, 0, 0, 0.4) 40%, transparent);
+}
+.wp-overlay-panel {
+  position: relative;
+  width: min(92vw, 1080px);
+  height: 100%;
+  background: var(--dsw-alias-bg-base, #fff);
+  border-left: 1px solid var(--dsw-alias-border-strong, rgba(128, 128, 128, 0.4));
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---- 面板宿主 ---- */
+.whalepod-team {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+.wp-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-default, rgba(128, 128, 128, 0.3));
+  background: var(--dsw-alias-bg-surface, #fff);
+  color: var(--dsw-alias-label-primary, inherit);
+  flex: 0 0 auto;
+}
+.wp-panel-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.wp-panel-close {
+  border: 1px solid var(--dsw-alias-border-default, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, inherit);
+  border-radius: 5px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.wp-panel-close:hover {
+  background: var(--dsw-alias-bg-elevated, rgba(0, 0, 0, 0.05));
+}
+.wp-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  background: var(--dsw-alias-bg-base, #fff);
+}
+.wp-panel-loading {
+  margin: auto;
+  color: var(--dsw-alias-label-secondary, inherit);
+  font-size: 13px;
+}
+.wp-panel-error {
+  margin: auto;
+  padding: 24px;
+  color: var(--dsw-alias-status-danger, #d64545);
+  font-size: 13px;
+  max-width: 520px;
+}
+.wp-panel-error-hint {
+  color: var(--dsw-alias-label-secondary, inherit);
+}
+.wp-panel-error code {
+  background: color-mix(in srgb, var(--dsw-alias-bg-elevated, #eee) 60%, transparent);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.wp-panel-error button {
+  margin-top: 8px;
+  border: 1px solid var(--dsw-alias-border-strong, rgba(128, 128, 128, 0.4));
+  background: transparent;
+  color: var(--dsw-alias-label-primary, inherit);
+  border-radius: 5px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
