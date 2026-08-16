@@ -8,7 +8,7 @@
   "files": ["lib", "src"],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "keywords": ["deepseek-harness", "dsh", "client-plugin", "whalepod", "team-panel"],
   "license": "Apache-2.0",
@@ -17,10 +17,14 @@
     "react-dom": "^18.0.0"
   },
   "dependencies": {
-    "@whalepod/honeycomb": "workspace:*"
+    "@whalepod/honeycomb": "link:/Users/qzp/aion2dsh/packages/honeycomb"
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0"
+    "@types/react-dom": "^18.0.0",
+    "@tsdown/css": "0.22.14",
+    "tsdown": "0.22.2",
+    "typescript": "^5.5.0",
+    "unrun": "^0.3.0"
   }
 }

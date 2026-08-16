@@ -1,0 +1,6 @@
+# 过渡态最小 workspace：
+# 仅把本插件目录钉为 pnpm workspace 根，使 `link:` 依赖（@whalepod/honeycomb）
+# 能按「相对本目录」解析、跨机器可移植。
+# 不声明其他包——honeycomb 走 `link:` 文件系统引用，不复制、不进本锁文件。
+# （正式形态由「装箱」卡 #01a008c3 决定：发布 npm / 纳入宿主 workspace / 打包内嵌。）
+packages: []
