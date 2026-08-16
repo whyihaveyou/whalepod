@@ -120,6 +120,9 @@ jobs:
         working-directory: HarnessShell
         env:
           VERSION: ${{ env.VERSION }}
+          # DMG_NAME 与 appcast enclosure 的 FULL_DMG 对齐（品牌化命名）；
+          # 不传则 make-dmg.sh 默认 HarnessShell.dmg → appcast 指向不存在的资产（404）
+          DMG_NAME: ${{ env.FULL_DMG }}
         run: ./Scripts/make-dmg.sh
 
       - name: Package ZIP — Full (parallel for fast download)
