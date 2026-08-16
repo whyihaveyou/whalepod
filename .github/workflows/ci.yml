@@ -55,7 +55,7 @@ jobs:
         working-directory: packages/honeycomb
         run: pnpm run test
 
-      - name: 'Run deterministic test suite (16 pinned; live 自动 skip)'
+      - name: 'Run deterministic test suite (17 pinned; live 自动 skip)'
         working-directory: packages/honeycomb
         run: |
           set -euo pipefail
@@ -79,6 +79,7 @@ jobs:
             test/transport-http.test.ts \
             test/transport-client.test.ts \
             test/transport-client-live.test.ts \
+            test/transport-cancel.test.ts \
             test/orchestration-loop.test.ts \
             test/watchdog-repro.test.ts \
             test/cancel-dispatch.test.ts \
