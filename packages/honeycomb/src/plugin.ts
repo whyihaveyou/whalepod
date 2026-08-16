@@ -39,9 +39,8 @@ export async function apply(ctx: Context, config?: HoneycombConfig): Promise<voi
 
   // runtime registry (§6.2): native 后端恒注册；connector 后端后续注册。
   const runtimes = new RuntimeRegistry()
-  // 当前签名需要 ctx（实现内取 ctx.agents）；编排线 native-runtime 重写后
-  // 将改为 options 对象（全可选），届时本调用点可简化为 createNativeRuntime()。
-  runtimes.register(createNativeRuntime(ctx))
+  // native-runtime 签名：options 对象（全可选），不依赖 ctx —— 装配在内部完成。
+  runtimes.register(createNativeRuntime())
 
   // services (§5.5) —— Service 子类构造即自注册到 ctx。
   const roster = new HoneycombRosterService(ctx, store, runtimes)

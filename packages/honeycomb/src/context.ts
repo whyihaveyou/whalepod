@@ -14,7 +14,7 @@ import type { LedgerService } from './services/ledger'
 import type { CourierService } from './services/courier'
 import type { MandateService } from './services/mandate'
 import type { RosterService } from './services/roster'
-import type { AgentsRuntime } from './runtime/native-runtime'
+import type { DshAgentsRegistry } from './runtime/native-runtime'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -24,7 +24,7 @@ declare module '@deepseek-ai/cordis' {
     mandate: MandateService
     roster: RosterService
     /** 原生 agent runtime（由 harness 装配；未装配时为 undefined）。 */
-    agents?: AgentsRuntime
+    agents?: DshAgentsRegistry
   }
 }
 
