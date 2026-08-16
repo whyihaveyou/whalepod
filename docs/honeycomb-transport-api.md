@@ -4,7 +4,7 @@
 > 产品：鲸群 WhalePod
 > 核心包：`@whalepod/honeycomb`
 > 责任人：架构-Pro-1
-> 状态：设计稿 v1（定稿）· 2026-08-16 契约对账修订（v1.1，以源码为准微调，见 §0 注记）
+> 状态：设计稿 v1（定稿）· 2026-08-16 契约对账修订（v1.1，以源码为准，见 §0 注记）· 同日文档跟随：§8.1 task.cancel 翻转 + README §6.7 注翻正（fedd605 落地）
 > 前置文档：[honeycomb-orchestration-architecture.md](./honeycomb-orchestration-architecture.md)（服务接口 DTO 定义见其 §5/§6）、[honeycomb-orchestration-loop.md](./honeycomb-orchestration-loop.md)
 > 位置：`packages/honeycomb/src/transport/`
 > 下游读者：实现-Pro-3（React 前端对接本 API surface）
@@ -363,12 +363,12 @@ packages/honeycomb/src/transport/
 | §3.1 hive 域（7 端点） | `client.hive.*` 7 方法（list/get/create/rename/setMode/setSessionMode/remove） | ✅ |
 | §3.2 member 域（8 端点） | `client.member.*` 8 方法（list/get/state/register/hatch/dismiss/rename/remove） | ✅ |
 | §3.3 task 域（7 端点） | `client.task.*` 7 方法（list/get/create/update/setOwner/addDependency/removeDependency） | ✅ |
-| §3.4 编排 cancel（1 端点） | **未暴露 `task.cancel`**（README client 节已注明：服务端已注册端点，`task.cancel` 方法随 transport 通道落地后一并补封装） | ✗（唯一缺口，已知） |
+| §3.4 编排 cancel（1 端点） | `client.task.cancel(id, reason?)`（fedd605 已暴露：reason 透传 task-cancelled 事实；幂等 202；409 三分/503 抛 `HoneycombTransportError`） | ✅ |
 | §3.5 message 域（6 端点） | `client.message.*` 6 方法（send/deliver/inbox/markRead/broadcast/feed） | ✅ |
 | §3.6 mandate 域（3 端点） | `client.mandate.*` 3 方法（can/assert/grants；assert 失败抛 `HoneycombTransportError`） | ✅ |
 | §4 WS 订阅流 | `connect/subscribe/unsubscribe/on/close/connected`；`on(topic)` 的 topic 键 = 事件层 `HiveEventMap`（§4.3 全 11 topic，含补订 ack 等待与断线退避重连） | ✅ |
 
-合计 31/32 REST 端点已封装；唯一缺口为 §3.4 的 `POST /v1/tasks/{id}/cancel`，前端如需停止按钮可先行裸 fetch 该端点，或等 client 补充封装。
+合计 32/32 REST 端点已封装（§3.4 cancel 由 fedd605 补入 `client.task` 域），前端停止按钮可直接使用 SDK，无需裸 fetch。
 
 **本任务（架构-Pro-1）交付**：
 - 本文档（API surface 定稿）；

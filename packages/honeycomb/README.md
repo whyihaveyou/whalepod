@@ -337,7 +337,7 @@ await client.close()                 // 永久关闭（同一实例不再自动�
 - `on(topic, handler)` 返回取消订阅函数；`connected` 为**就绪语义**（socket 已 OPEN 且重连补订全部 ack 完成）；
 - 类型全部 `import type` 自包内 DTO（`types.ts` / `transport/types.ts` / `events.ts`），前端无需另造类型；
 - 零运行时第三方依赖（`globalThis.fetch` + 平台 WebSocket）。
-- 注：REST 的 `POST /v1/tasks/{id}/cancel`（cancel ⑥ transport 通道）为服务端已注册端点；client 侧 `task.cancel` 方法随 transport 通道落地后一并补封装。
+- 注：REST 的 `POST /v1/tasks/{id}/cancel`（cancel ⑥ transport 通道）服务端端点与 client 侧 `task.cancel(id, reason?)` 均已就绪（语义矩阵：幂等 202 / 409 三分 / 503，见 docs/honeycomb-transport-api.md §3.4、§8.1）。
 
 ### 6.8 编排循环（`consumer/orchestration-loop.ts`，`createOrchestrationLoop`）
 
