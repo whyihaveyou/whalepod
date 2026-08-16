@@ -23,12 +23,21 @@
 # =============================================================================
 set -euo pipefail
 
-# ---- 参数 -------------------------------------------------------------------
+# ---- 参数（CLI 优先，env 兜底）--------------------------------------------------
 PROFILE=${PROFILE:-web}
-SRC=${SRC:?需要 --src 指向 honeycomb 包目录（如 Resources/node_modules/@whalepod/honeycomb）}
+SRC=${SRC:-}
 DSH_HOME=${DSH_HOME:-"$HOME/Library/Application Support/WhalePod/harness"}
 APPLY=0
-[ "${1:-}" = "--apply" ] && APPLY=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --apply)        APPLY=1;      shift 1 ;;
+    --profile)      PROFILE="$2"; shift 2 ;;
+    --src)          SRC="$2";     shift 2 ;;
+    --dsh-home)     DSH_HOME="$2"; shift 2 ;;
+    *)              shift 1 ;;   # 忽略未知 flag
+  esac
+done
+[ -n "$SRC" ] || { echo "❌ 需要 --src 指向 honeycomb 包目录（如 Resources/node_modules/@whalepod/honeycomb）" >&2; exit 2; }
 
 PROFILE_DIR="$DSH_HOME/profiles/$PROFILE"
 SHARED_NM="$DSH_HOME/profiles/node_modules"
@@ -37,8 +46,10 @@ DEST="$SHARED_NM/@whalepod/honeycomb"
 echo "==> profile=$PROFILE  dsh-home=$DSH_HOME  apply=$APPLY"
 
 # ---- 0. 校验 -----------------------------------------------------------------
-[ -d "$PROFILE_DIR" ] || { echo "❌ profile 不存在: $PROFILE_DIR" >&2; exit 2; }
+[ -d "$PROFILE_DIR" ] || { echo "❌ profile 目录不存在: $PROFILE_DIR（fuse 空 bundles?先建 profile 或检查 dsh-home）" >&2; exit 2; }
+[ -f "$PROFILE_DIR/package.json" ] || { echo "❌ profile 缺 package.json: $PROFILE_DIR/package.json" >&2; exit 2; }
 [ -f "$SRC/package.json" ] || { echo "❌ src 不是 honeycomb 包目录: $SRC" >&2; exit 2; }
+# 空 bundles 兜底：node 段自动处理（缺失 dsh/dsh.profile/dsh.profile.bundles 均回退 []）。
 
 # 演示安全：非 --apply 时对 profile 副本演练
 if [ "$APPLY" -ne 1 ]; then
