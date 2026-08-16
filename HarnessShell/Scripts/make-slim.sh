@@ -25,10 +25,13 @@ VERSION="${VERSION:-0.1.0}"
 ARCH="${ARCH:-arm64}"
 DIST_DIR="${DIST_DIR:-dist}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
 
 echo "==> [Slim] 1/3 build-app.sh（不跑 build-runtime.sh → .app 不带 bundled node/dsh）"
 # build-app.sh 内部已做 swift 编译 + ad-hoc 签名 + codesign --verify（各参数走环境变量）
+# 必须透传 ARCH（与 zip 文件名一致）+ SCRATCH_PATH（交叉构建隔离，避免拷错宿主产物）
 APP_NAME="$APP_NAME" VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" DIST_DIR="$DIST_DIR" SIGN_IDENTITY="$SIGN_IDENTITY" \
+  ARCH="$ARCH" SCRATCH_PATH="${SCRATCH_PATH:-}" \
   "$ROOT/Scripts/build-app.sh"
 
 APP="$DIST_DIR/$APP_NAME.app"

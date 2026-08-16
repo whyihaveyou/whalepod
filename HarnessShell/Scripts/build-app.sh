@@ -21,6 +21,9 @@
 #   SIGN_OPTIONS    附加签名选项           默认 ""；产品化建议 "--options runtime --timestamp"
 #   DIST_DIR        输出目录               默认 dist
 #   KEEP_BUILD      是否复用 .build（跳过重新编译）默认 0（不跳过）
+#   ARCH            架构（swift --arch 命名：x86_64 / arm64）默认$(uname -m)（宿主）
+#                   交叉构建示例：ARCH=x86_64 ./Scripts/build-app.sh
+#   SCRATCH_PATH    隔离编译缓存（跨架构并存时建议设，避免 .build/release 指针互踩）默认空
 # =============================================================================
 set -euo pipefail
 
@@ -37,20 +40,32 @@ SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 SIGN_OPTIONS="${SIGN_OPTIONS:-}"
 DIST_DIR="${DIST_DIR:-dist}"
 KEEP_BUILD="${KEEP_BUILD:-0}"
+ARCH="${ARCH:-$(uname -m)}"
+SCRATCH_PATH="${SCRATCH_PATH:-}"
 
 PLIST_TEMPLATE="Sources/HarnessShell/Info.plist"
 ICON_ICNS="Resources/AppIcon.icns"
 
-echo "==> 配置：APP_NAME=$APP_NAME BUNDLE_ID=$BUNDLE_ID VERSION=$VERSION SIGN_IDENTITY=$SIGN_IDENTITY"
+echo "==> 配置：APP_NAME=$APP_NAME BUNDLE_ID=$BUNDLE_ID VERSION=$VERSION SIGN_IDENTITY=$SIGN_IDENTITY ARCH=$ARCH"
 
 # ---- 1) 编译 --------------------------------------------------------------
 if [ "$KEEP_BUILD" = "1" ]; then
   echo "==> 跳过编译（KEEP_BUILD=1），使用现有 .build/release/$APP_NAME"
 else
-  echo "==> swift build -c release ..."
-  swift build -c release --product "$APP_NAME"
+  echo "==> swift build -c release --arch $ARCH ..."
+  if [ -n "$SCRATCH_PATH" ]; then
+    swift build -c release --product "$APP_NAME" --arch "$ARCH" --scratch-path "$SCRATCH_PATH"
+  else
+    swift build -c release --product "$APP_NAME" --arch "$ARCH"
+  fi
 fi
-BIN=".build/release/$APP_NAME"
+# swift build --arch 后 .build/release 会指向最后构建的三元组；设置了 SCRATCH_PATH 时必须从 scratch 取，
+# 否则相对路径 .build/release 会落回宿主（arm64）产物 → 声言交叉实拷错库。
+if [ -n "$SCRATCH_PATH" ]; then
+  BIN="$SCRATCH_PATH/release/$APP_NAME"
+else
+  BIN=".build/release/$APP_NAME"
+fi
 [ -x "$BIN" ] || { echo "!! 找不到可执行文件 $BIN"; exit 1; }
 echo "==> 可执行文件就绪: $BIN ($(du -h "$BIN" | cut -f1))"
 
