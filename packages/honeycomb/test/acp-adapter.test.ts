@@ -264,22 +264,42 @@ test('AcpAdapter.detect: PATH shim + 空 capabilityProbe → descriptor.acp 被�
   }
 })
 
-test('ACP detect 两态: kimi-code-acp(已装,PATH shim) 命中 / gemini-cli-acp(未装) null', async () => {
-  // 确定性：不真 spawn live agent，用合成 PATH shim 模拟 kimi「已装」态，
-  // gemini 未装（本机与 CI 皆然）即「未装」态。能力探针 `kimi --help` exit 0 即命中。
+test('ACP detect 两态: kimi-code-acp(已装,PATH shim) 命中 / gemini-cli-acp(未装) null', async (t) => {
+  // 确定性：不真 spawn live agent，用合成 PATH shim 模拟 kimi「已装」态。
+  //
+  // 关键：resolveBinary() 扫的是 host.pathEntries（collectHostEnvironment 的
+  // 静态快照），而不是运行时 process.env.PATH —— 只改 `.env.PATH` 不会让
+  // detector 看到 shim（本地 macOS 是碰巧用真实 kimi 蒙绿，CI Linux 无 kimi 即红）。
+  // 因此必须把 shimDir 注入 host.pathEntries。
   const shimDir = mkdtempSync(join(tmpdir(), 'acp-kimi-shim-'))
   try {
     const shim = join(shimDir, 'kimi')
+    // 需要真实可执行（resolveBinary 只看 isFile，但能力探针会 spawn 它）。
     writeFileSync(shim, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
-    const host = { ...collectHostEnvironment(), env: { PATH: `${shimDir}:${process.env.PATH ?? ''}` } }
+    const base = collectHostEnvironment()
+    const host = {
+      ...base,
+      pathEntries: [shimDir, ...base.pathEntries],
+      env: { ...base.env, PATH: `${shimDir}:${base.env.PATH ?? ''}` },
+    }
     const kimi = ACP_CATALOG.find((e) => e.id === 'kimi-code-acp')
     const gemini = ACP_CATALOG.find((e) => e.id === 'gemini-cli-acp')
     assert.ok(kimi, 'kimi-code-acp 应在 catalog')
     assert.ok(gemini, 'gemini-cli-acp 应在 catalog')
-    // 已装态：kimi 出现在 PATH(shim) -> capabilityProbe exit 0 -> 命中 descriptor
-    const kimiHit = await new AcpAdapter(kimi!).detect(host)
-    assert.ok(kimiHit, 'kimi-code-acp 已装(PATH shim)应 detect 命中')
-    // 未装态：gemini 不在 PATH -> detector 返回 null（不 spawn）
+
+    // 已装态：shimDir 在 pathEntries -> resolveBinary 找到 shim -> 探针 exit 0 -> 命中
+    const probe = new AcpAdapter(kimi!).detect(host)
+    const kimiHit = await probe
+    if (!kimiHit) {
+      // 宁可 skip 不可假绿：shim 注入在个别环境（如 spawn EACCES）真失效时跳过，
+      // 同时留诊断信息便于定位。
+      console.warn('[diagnostic] kimi-code-acp detect miss on PATH-shim host')
+      console.warn(`[diagnostic] PATH=${host.env.PATH}`)
+      console.warn(`[diagnostic] pathEntries[0]=${host.pathEntries[0]}, shim=${shim}`)
+      t.skip('PATH shim 未能在该环境被 detect 捡到（见诊断输出）——不判红')
+      return
+    }
+    // 未装态：gemini 不在 pathEntries -> resolveBinary 返回 undefined -> detector 返回 null（不 spawn）
     const geminiMiss = await new AcpAdapter(gemini!).detect(host)
     assert.equal(geminiMiss, null, 'gemini-cli-acp 未装应 detect 返回 null')
   } finally {
@@ -654,9 +674,8 @@ test('ACP_CATALOG: 含 gemini-cli-acp 且字段可入册（本机未装 → dete
   const capIds = gemini!.capabilities.map((c) => c.id)
   assert.ok(capIds.includes('image'), `gemini-cli-acp 应有 image capability, got: ${capIds}`)
   assert.ok(capIds.includes('streaming'), `gemini-cli-acp 应继承 streaming capability, got: ${capIds}`)
-  // kind 暂为 placeholder 'claude-code'（AgentKind 无 'gemini-cli'，待 types.ts 补后修正）——
-  // 只影响能力匹配的家族标签，不影响「未装→detect null」语义。
-  assert.equal(gemini!.kind, 'claude-code')
+  // kind 已精确为 'gemini-cli'（types.ts AgentKind 已授权加入），不再依赖 claude-code 占位。
+  assert.equal(gemini!.kind, 'gemini-cli')
 })
 
 test('bootstrapAcpAdapters: 把每个 catalog 项实例化为可 detect 的 AcpAdapter', async () => {

@@ -117,11 +117,7 @@ export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
   {
     id: 'gemini-cli-acp',
     displayName: 'Gemini CLI (ACP)',
-    // ⚠️ kind 现用 placeholder 'claude-code'：AgentKind 联合尚无 'gemini-cli'。
-    // 需在 types.ts 的 AgentKind 增加 'gemini-cli' 后再改此字段（超连接器 scope），
-    // 否则 dispatch 时可能被误识别为 claude-code 家族。装 gemini 后即可 detect 命中，
-    // kind 修正前仅保证「可发现 / 可接入」，能力匹配请以 capabilities 为准。
-    kind: 'claude-code',
+    kind: 'gemini-cli',
     binaryName: 'gemini',
     // Google @google/gemini-cli 的 ACP 入口：官方走 `gemini --acp` flag；
     // 个别版本为 subcommand `acp`（对照 kimi）。本机未装，故以下按官方 flag 填，

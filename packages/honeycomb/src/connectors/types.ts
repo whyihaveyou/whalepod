@@ -12,7 +12,7 @@
 export type Confidence = 'binary' | 'config-only' | 'manual'
 
 /** Known external CLI-agent kinds. */
-export type AgentKind = 'claude-code' | 'codex' | 'kimi-code' | 'opencode' | 'hermes'
+export type AgentKind = 'claude-code' | 'codex' | 'kimi-code' | 'opencode' | 'hermes' | 'gemini-cli'
 
 /** A capability exposed by a detected agent. */
 export interface AgentCapability {
