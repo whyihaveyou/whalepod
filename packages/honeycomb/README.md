@@ -206,6 +206,7 @@ npm run example        # 或按 examples/hive-quickstart/README.md 的指引
 | registerRuntime | `registerRuntime(runtime: MemberRuntime) → void` | 注册命名运行时后端（如 `'native'`） |
 | listRuntimes | `listRuntimes() → MemberRuntime[]` | 已注册运行时 |
 | sendTo | `sendTo(hiveId, memberId, msg: RuntimeMessage) → Promise<boolean>` | 向成员会话投递指令（store/forward）；`RuntimeMessage = { role, content }` |
+| cancelTask | `cancelTask(hiveId, memberId) → Promise<void>` | 取消成员在途会话（roster → RuntimeRegistry → RuntimeHandle.cancel，幂等尽力而为不抛错）；句柄在 hatch 时自动登记、dismiss/remove 时注销 |
 
 **`ctx.ledger`（LedgerService）** — 任务账本：
 

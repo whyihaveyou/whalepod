@@ -329,13 +329,13 @@ POST /hive/:hiveId/task/:taskId/cancel
 | ③ 编排循环 dispatch 看门狗调 cancel + 任务事实 cancelled 类型 | consumer/orchestration-loop.ts | ① | 高（把派工超时闭环做对） | 0.5 天 | ✅ 落地（HiveFact 新增 task-cancelled + store fold） |
 | ④ 编排循环 cancelTask 入口 + emit 'cancelled' 事件 | consumer/orchestration-loop.ts | ① ③ | 中（用户/queen 主动 cancel） | 0.5 天 | ✅ 落地（roster.cancelTask? / appendFact? 均 optional，向后兼容） |
 | ⑤ native-runtime cancel 兼容 + 与编排-Pro 协调 | runtime/native-runtime.ts | ① native-runtime 收口 | 中（外部 DSH agent 也要能 cancel） | 1 天 | ✅ 落地（§4.1：feature-detect 原生中断 / 降级 close+30s / cancelInProgress 按派工归零 / cancelled 事件 + idle 改写；test/native-runtime.test.ts +3 例全绿） |
-| ⑥ transport cancel 通道 | transport/ | #01a004b1-9056 决议 | 低（UI 才会用） | 1 天 | ⏳ 等 #01a004b1-9056 |
-| ⑦ E2E 集成测试（dispatch watchdog → cancel → task-cancelled） | test/ | ①②③ | 高（回归防护） | 0.5 天 | ✅ 部分覆盖（test/cancel-dispatch.test.ts 23 例：①-④ 全链路单测；跨进程 E2E 待 ⑤⑥） |
+| ⑥ transport cancel 通道 | transport/ | #01a004b1-9056 决议 | 低（UI 才会用） | 1 天 | ✅ 落地（任务 #01a00581，a9c2894：POST /v1/tasks/{id}/cancel 202/幂等 202/409/503，transport-cancel.test.ts 6 例 pinned，随 alpha.4 出船） |
+| ⑦ E2E 集成测试（dispatch watchdog → cancel → task-cancelled） | test/ | ①②③⑤⑥ | 高（回归防护） | 0.5 天 | ✅ 收官（方案 docs/cancel-e2e-plan.md 522faca；实施 #01a008ec：cancel-e2e-acp/native/stdio/rest.test.ts 四文件 pinned——真 transport+持久化+真 runtime 三 adapter 路径串联 + 竞态/幂等/REST 语义矩阵；附带生产装配补线 roster.cancelTask/trackHandle + ledger.create owner 归一为 null 两处真缺口修复） |
 
 **总估时**：~4 天（不含 transport 决议等待）
 
 **立刻可做（无依赖）**：① ② ③ ④ —— ✅ 全部落地（任务 #01a0052c，test/cancel-dispatch.test.ts 23 例全绿）
-**等依赖**：⑤ ✅ 已落地（任务 #01a0087d），⑥ 等 #01a004b1-9056
+**等依赖**：⑤ ✅ 已落地（任务 #01a0087d），⑥ ✅ 已落地（任务 #01a00581）
 
 ## 7. 验证
 
@@ -343,6 +343,7 @@ POST /hive/:hiveId/task/:taskId/cancel
 - `pnpm tsx --test test/cancel-dispatch.test.ts`（✅ ①-④ 全链路：registry cancelTask / 胶水 feature-detect + cancelInProgress 泵侧区分 / 看门狗先 cancel 再 failDispatch / cancelTask 入口 + task-cancelled fold，23 例）
 - `pnpm tsx --test test/native-runtime.test.ts`（✅ ⑤：cancel 在途 native 任务 → cancelled + idle、已完成再取消 no-op、重复取消幂等，13 例全绿）
 - `pnpm tsx --test test/connector-cancel.test.ts`（⏳ 待连接器-Pro 交付，契约定锚；交付前不要触碰该文件）
+- `pnpm tsx --test test/cancel-e2e-acp.test.ts test/cancel-e2e-native.test.ts test/cancel-e2e-stdio.test.ts test/cancel-e2e-rest.test.ts`（✅ ⑦ E2E：ACP 协议级取消真链 / native D2 spy / stdio 降级 143 不误标 / REST 语义矩阵+单事实行，四文件随 CI pinned）
 - `pnpm tsx --test test/orchestration-loop.test.ts`（回归：既有派工算法未被 cancel 改动破坏）
 - `pnpm tsx --test test/persistence.test.ts`（回归：事实 fold 不受 task-cancelled 新词影响）
 

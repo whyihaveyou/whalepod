@@ -55,7 +55,7 @@ jobs:
         working-directory: packages/honeycomb
         run: pnpm run test
 
-      - name: 'Run deterministic test suite (17 pinned; live 自动 skip)'
+      - name: 'Run deterministic test suite (21 pinned; live 自动 skip)'
         working-directory: packages/honeycomb
         run: |
           set -euo pipefail
@@ -88,7 +88,11 @@ jobs:
             test/connector-live.test.ts \
             test/acp-adapter.test.ts \
             test/acp-kimi-live.test.ts \
-            test/native-runtime.test.ts
+            test/native-runtime.test.ts \
+            test/cancel-e2e-acp.test.ts \
+            test/cancel-e2e-native.test.ts \
+            test/cancel-e2e-stdio.test.ts \
+            test/cancel-e2e-rest.test.ts
 
       - name: Upload coverage & logs on failure
         if: failure()
