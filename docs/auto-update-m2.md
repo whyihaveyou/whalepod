@@ -48,15 +48,19 @@ https://github.com/whyihaveyou/whalepod/releases/latest/download/appcast.xml
 
 > 历史精确性注记：实际发布的 alpha.4 appcast 的 Full enclosure 是泛名 `HarnessShell.dmg`（手动档显式传 FULL_DMG=泛名，item 内 url===asset 名自洽）；示例中的品牌名 Full enclosure 自 **alpha.5 起**才生效（make-dmg.sh DMG_NAME 覆盖 + release.yml 对齐）。两档 item 各自内部自洽即可，M1 updater 按 item 内 url 拉取各能命中。
 
-### 1.2 ⚠️ M1 parser 缺口（M2 必须改）
+### 1.2 ⚠️ M1 parser 缺口（原 M2 必改项，已由 #01a008cd 的只读侧先行关闭）
 
-M1 `UpdaterService.parseAppcast*` 只抓**第一条** `<enclosure url>`（single urlRegex / `firstCapture`）→ 永远拿到 **Full DMG**。M2 需改为：
+历史：M1 `UpdaterService.parseAppcast*` 曾只抓**第一条** `<enclosure url>`（single urlRegex / `firstCapture`）→ 永远拿到 **Full DMG**。原计划 M2 需改：
 
 1. 每条 item 解析出**两条 enclosure**（Full + Slim），连同各自的 `sha256`、`length`。
 2. **按本机安装档位选 enclosure**：
    - 档位判定：`.app` 内是否存在 `Contents/Resources/node`（bundled node）→ 存在 = Full（自举需要 node），不存在 = Slim。
    - 命中档 → 取该 enclosure 的 `url`（拼下载）与 `sha256`（校验）。
    - 兜底：档位匹配不到（appcast 里只有一条 / 版本混档）→ fallback 到 `releasePageURL`，提示用户去网页手动选，不擅自换档（沿用 §4.3 结论）。
+
+> **✅ 状态更新（Task #01a008cd，commit 6bc2da6，2026-08-16）**：以上 1-2 的**只读解析侧已全部落地**并随 alpha.5 发版。`parseAppcast*` 现按扩展名分类解析双 enclosure（.dmg=Full / .zip=Slim，重命名通用，alpha.4 泛名 `HarnessShell.dmg` 亦可识别），per-enclosure 段内取各自 `sha256`/`length`（修复整条 item 首匹配会串值的 bug）；`UpdateInfo` 已扩 `tier`/`expectedSHA256`/`length`/`verifyScheme(.sha256/.ed25519)`；档位判定 `Tier.resolve`（`Contents/Resources/node` 存在=Full）+ `asUpdateInfo(for:)` 命中档、单条兜底回落 `releasePageURL` 不换档；自测 36/36 全绿。
+>
+> **M2 实现期剩落地的是下载/校验/替换/重启侧**：用 §1.2 现在就能拿到的 `UpdateInfo.tier/downloadURL/expectedSHA256/length` 接 `downloadTask` + sha256 校验（§1.3/§1.4），无需再改解析侧。
 
 ### 1.3 下载
 
