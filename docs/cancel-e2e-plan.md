@@ -133,7 +133,7 @@ spawn argv：`acp-mock-agent.mjs`（ACP 1.x NDJSON-over-stdio）；catalog 用�
 - 收到 `close()` → 依次发 `tool-result / stream / done(exit 143)`（模拟 SIGTERM）→ pump sees done→cancelled（语义已由单测覆盖，E2E 不重复抽检）→ **assert**：成员回收仍走 idle（cancelInProgress 改写已开）；
 - **若未来 stdio agent 需真实测试 send 协议**：再补一扇 legacy 会话事件序列（cancel 之前/之后的差别仅发生在 window 内的 done 时序——两种顺序下 final state 都必须为 idle，不允许 failed）。
 
-**E2E 场景接线（stdio）**：A 场景同 ACP，只是 A4 断言改为「close() 被调一次，30s window 内退出前可能经过 kill()（不强制）」。由于 stdio 无协议 cancel，**不 assertion 事件 cancelled 到达**（它不发生）——assertion 的是终态 idle + 没闸 failed。
+**E2E 场景接线（stdio）**：A 场景同 ACP，只是 A4 断言改为「close() 被调一次，30s window 内退出前可能经过 kill()（不强制）」。由于 stdio 无协议 cancel，**不断言事件 cancelled 到达**（它不发生）——断言的是终态 idle + 没有 failed。
 
 ### 2.3 native 路径（真实现已有 ⑤，13 例基线）
 
