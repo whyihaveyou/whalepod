@@ -8,14 +8,14 @@
 // 落位 harness 后按 AGENTS.md CSS-module 约定收编为 .module.css（见 panel-embedding-plan）。
 // ============================================================
 import { useEffect, useRef, useState } from "react";
-import App from "../../../src/App";
-import { setTeamApiOverride } from "../../../src/hooks/useTeamStore";
-import type { TeamApi } from "../../../src/services/api";
+import App from "../app/App";
+import { setTeamApiOverride } from "../app/hooks/useTeamStore";
+import type { TeamApi } from "../app/services/api";
 import { createRealTeamApi, RealTeamOptions } from "./teamApi-real";
 import { PANEL_SCOPE, panelTokenRules } from "./themeTokens";
 
-import "../../../src/styles/tokens.css";
-import "../../../src/styles/global.css";
+import "../app/styles/tokens.css";
+import "../app/styles/global.css";
 
 export interface TeamPanelProps {
   /** 真实 transport 端点 / hive 选择 */

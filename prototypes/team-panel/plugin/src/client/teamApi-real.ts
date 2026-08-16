@@ -33,8 +33,8 @@ import type {
   SpawnTemplate,
   Task,
   TaskStatus,
-} from "../../../src/types";
-import type { TeamApi } from "../../../src/services/api";
+} from "../app/types";
+import type { TeamApi } from "../app/services/api";
 
 // ------------------------------------------------------------
 // 配置

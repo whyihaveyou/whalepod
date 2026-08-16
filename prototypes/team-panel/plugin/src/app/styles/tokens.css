@@ -1,0 +1,148 @@
+/* ============================================================
+   鲸群 WhalePod — 统一设计 token 源（唯一权威）
+   桌面壳 + 团队面板共用。任何组件禁止写死色值；
+   新颜色必须先加 token 再使用。
+   主题默认：暗色（dark-first）。agent 工作站是长时间
+   盯屏工具，暗色为出厂默认；`data-theme="light"` 切换浅色。
+   来源合并：design/visual-identity.md（品牌/字体/主题）
+             + design/team-panel/（面板语义扩展）
+   ============================================================ */
+
+:root {
+  /* ---- 品牌色（visual-identity §3.1） ---- */
+  --brand-primary: #8FA4FF;          /* 暗色下用亮版，保证对比度 */
+  --brand-primary-strong: #4D6BFE;   /* 浅色同款主色；暗色下用于强调填充底 */
+  --brand-violet: #7A4DFF;           /* 渐变副色、AI/agent 强调、进行中指示 */
+  --brand-gradient: linear-gradient(135deg, #5B7CFF, #7A4DFF); /* UI 内不大面积使用 */
+  --accent-spark: #22D3EE;           /* 活跃 agent 指示、焦点环辅助 */
+
+  /* ---- 语义色（visual-identity §3.2，dark 列） ---- */
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --danger:  #F87171;
+  --info:    #8FA4FF;
+
+  /* ---- 主题表面（visual-identity §5.2，dark = 默认） ---- */
+  --bg-app: #0D1020;
+  --bg-surface: #161A2E;             /* 面板/列表栏背景 */
+  --bg-sunken: #0A0D1A;              /* 终端、日志区、输入框底 */
+  --bg-elevated: #1D2340;            /* 卡片、popover、选中条目（面板扩展） */
+  --bg-overlay: rgba(4, 6, 16, .6);  /* 模态遮罩 */
+  --text-primary: #E8EAF6;
+  --text-secondary: #9AA0BE;
+  /* 三级文字（QA §6 新增）：时间戳/系统条/任务 id 等 meta 文字。
+     卡 AA 下限：bg-surface 上 ~4.9:1。disabled 色只留 placeholder/装饰，不做正文。 */
+  --text-tertiary: #7E86A0;
+  --text-disabled: #565C78;
+  --border-default: #262B45;
+  --border-strong: #3A4066;
+
+  /* ---- 强调语义（accent = 品牌主色） ---- */
+  --accent: var(--brand-primary);
+  --accent-hover: #A9BAFF;                      /* 文字/链接 hover */
+  --accent-subtle: rgba(143, 164, 255, .16);  /* 选中背景、广播模式描边 */
+  /* 填充按钮：暗色下不用亮版 #8FA4FF 做填充底（白字对比度仅 ~2.3:1），
+     统一用浅色同款 #4D6BFE 填充 + 白字（~4.3:1，14px/500 达标） */
+  --accent-fill: #4D6BFE;
+  --accent-fill-hover: #5B7CFF;
+  --text-on-accent: #FFFFFF;
+
+  /* ---- 状态语义（团队面板全局一致，见 interaction-spec §2） ---- */
+  --status-active:   var(--accent-spark);    /* agent working / 任务 in_progress：活跃火花 */
+  /* idle/offline 灰：dark #6E7692 在 bg-surface 上 ~3.9:1（图形 ≥3:1 达标）；
+     旧值 text-disabled #565C78 仅 ~2.7:1，QA 否决。状态文字一律用 text-secondary，不用 disabled 色。 */
+  --status-idle:     #6E7692;                /* 空闲（状态点/图形） */
+  --status-pending:  var(--text-secondary);  /* 任务 pending（空心/虚线） */
+  --status-done:     var(--success);         /* 完成 */
+  --status-danger:   var(--danger);          /* failed / 错误 */
+  --status-warn:     var(--warning);         /* blocked / 等待审批 */
+  --status-progress: var(--brand-violet);    /* spawning / typing / 生成中 */
+  --status-offline:  #6E7692;                /* offline（空心点，靠形状与 idle 区分） */
+
+  /* ---- 字体（visual-identity §4） ---- */
+  --font-ui: Inter, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Space Grotesk", Inter, sans-serif;  /* 仅空状态/营销大标题 */
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 字阶 1.25，基准 14px */
+  --text-xs: 11px;    --text-xs-lh: 16px;
+  --text-sm: 12px;    --text-sm-lh: 18px;
+  --text-base: 14px;  --text-base-lh: 22px;
+  --text-md: 17.5px;  --text-md-lh: 26px;
+  --text-lg: 22px;    --text-lg-lh: 30px;
+  --text-xl: 27.5px;  --text-xl-lh: 36px;
+
+  /* ---- 间距（4px 基栅） ---- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 20px; --space-6: 24px;
+
+  /* ---- 圆角（visual-identity §5.3 + 徽章扩展） ---- */
+  --radius-sm: 4px;    /* 徽章、tag */
+  --radius-md: 6px;    /* 控件：按钮、输入框 */
+  --radius-lg: 10px;   /* 卡片、面板、popover、消息气泡 */
+  --radius-xl: 14px;   /* 模态 */
+  --radius-full: 999px;/* 状态点、头像 */
+
+  /* ---- 阴影（暗色：不用投影分层，浮层靠 border-strong；保留 popover 微投影） ---- */
+  --shadow-1: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, .4);
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, .55);
+
+  /* ---- 动效 ---- */
+  --duration-fast: 100ms;
+  --duration-base: 160ms;
+  --duration-slow: 240ms;
+  --ease-out: cubic-bezier(.2, .8, .3, 1);
+
+  /* ---- 结构尺寸（桌面壳 + 面板） ---- */
+  --titlebar-h: 40px;
+  --statusbar-h: 24px;
+  --nav-w-collapsed: 56px;
+  --nav-w-expanded: 200px;
+  --list-w-min: 280px;
+  --list-w-max: 420px;
+  --list-item-h: 48px;
+  --input-h: 32px;
+}
+
+/* ---- 浅色主题（可选切换；visual-identity §5.1 / §3.2 light 列） ---- */
+[data-theme="light"] {
+  --brand-primary: #4D6BFE;
+  --info: #4D6BFE;
+  --success: #16A34A;
+  --warning: #D97706;
+  --danger:  #DC2626;
+
+  --bg-app: #F7F8FC;
+  --bg-surface: #FFFFFF;
+  --bg-sunken: #EFF1F8;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(26, 29, 46, .35);
+  --text-primary: #1A1D2E;
+  --text-secondary: #5A6072;
+  --text-tertiary: #6B7280;   /* 白底 ~4.8:1 */
+  --text-disabled: #9BA1B5;
+  --border-default: #E2E5F0;
+  --border-strong: #C9CEDF;
+
+  --accent-hover: #3B5BEE;
+  --accent-subtle: rgba(77, 107, 254, .12);
+  --accent-fill: #4D6BFE;
+  --accent-fill-hover: #3B5BEE;
+  --text-on-accent: #FFFFFF;
+
+  --status-idle:    #848BA1;   /* 全表面校准：sunken 上 ~3.0、白底 ~3.4（K3-2 边界数据修订） */
+  --status-offline: #848BA1;
+
+  --shadow-1: 0 1px 2px rgba(26, 29, 46, .06);
+  --shadow-popover: 0 4px 16px rgba(26, 29, 46, .10);
+  --shadow-modal: 0 12px 40px rgba(26, 29, 46, .18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}
