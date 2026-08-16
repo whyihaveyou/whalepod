@@ -63,12 +63,19 @@ Permission 请求默认 fail-closed（`{ outcome: 'cancelled' }`）；harness �
 | ----------------- | -------- | ---------- | ---------------- | --------------------------------------------- | --------------- |
 | `opencode-acp`    | `opencode` | `['acp']`  | `['--help']`     | 通用 streaming/tool-use                       | `.opencode`     |
 | `kimi-code-acp`   | `kimi`     | `['acp']`  | `['--help']`     | streaming/tool-use/**image**（自报）         | `.kimi-code`    |
+| `gemini-cli-acp`  | `gemini`   | `['--acp']`| `['--version']`  | streaming/tool-use,**image**（规划）         | `.gemini`       |
+
+> `gemini-cli-acp` 为 `npx -y @google/gemini-cli` 准备的条目（已启用入册）。本机/CI 未装，
+> 按「未装→detect 返回 null」语义处理：装后即可自动检测命中。ACP 入口官方为 `gemini --acp`
+> （个别版本 subcommand `acp`，安装后请以 `gemini --help` 实测校正 spawnArgs）。kind 暂为
+> placeholder `claude-code` —— AgentKind 联合尚无 `gemini-cli`，需在 `types.ts` 补充后修正
+> （不影响「可发现 / 可接入」，只影响能力匹配的家族标签）。
 
 接入的两种姿势：
 - **走 catalog**：在 `connectors/adapters/acp.ts` 的 `ACP_CATALOG` 追加 `AcpCatalogEntry`，再 `bootstrapAcpAdapters()` 一键实例化所有 catalog 项。
 - **走运行时探测**：detector 跑 `probeAcp` 时会同时探测 catalog 里的每一项，能命中且 `capabilityProbe` 退出码 0 的会出现在 `discoverAll()` 的结果里（`descriptor.acp` 字段被填上）。
 
-`gemini-cli-acp` 是为 `npx -y @google/gemini-cli` 准备的 catalog 模板（已注释），待用户本机安装后可取消注释启用。
+> 本机/CI 均未装 `gemini` 时，`gemini-cli-acp` 按「未装→detect 返回 null」语义处理；装 `npx -y @google/gemini-cli` 后自动可检测命中。
 
 ## Onboarding 步骤
 
@@ -256,11 +263,14 @@ test/acp-adapter.test.ts
 │     - normalize: text + image 同 chunk → stream + image
 │     - normalize: tool_call 含 image → tool-call + image + tool-result
 │     - normalize: tool_call_update 含 image → image + tool-result
-├─ 6. ACP_CATALOG sanity (2 用例)
+├─ 6. ACP_CATALOG sanity (3 用例)
 │     - opencode-acp 字段一致
 │     - kimi-code-acp 字段与实测对齐（spawnArgs=acp, image capability）
+│     - gemini-cli-acp 字段入册（binaryName=gemini, spawnArgs=['--acp'], image capability）
 ├─ 6b. bootstrapAcpAdapters (1 用例)
 │     - ACP_CATALOG 每一项都能实例化为 AcpAdapter
+├─ 6c. detect 两态 (1 用例)
+│     - PATH shim 模拟 kimi 「已装」→ 命中 descriptor；gemini 未装 → detect 返回 null
 └─ 7. live opt-in (2 用例, RUN_ACP_LIVE=1)
       - 本机 opencode acp 真链路
       - 本机 kimi acp 真链路（OAuth-backed, 25s 限时防拖慢套件）

@@ -114,18 +114,24 @@ export const ACP_CATALOG: readonly AcpCatalogEntry[] = [
     //   mcpCapabilities.{http, sse} = true →  暂不暴露，等 MCP 集成落地再补
     capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image', description: 'Accept image content in prompt' }],
   },
-  // 未来追加示例：取消注释即可启用。`gemini-cli-acp` 用 Google 官方
-  // @google/gemini-cli 提供的 `gemini --acp`（或 subcommand `acp`，待 gemini 版本确认）。
-  // {
-  //   id: 'gemini-cli-acp',
-  //   displayName: 'Gemini CLI (ACP)',
-  //   kind: 'claude-code', // 需要新增 'gemini-cli' 到 AgentKind 联合
-  //   binaryName: 'gemini',
-  //   spawnArgs: ['--acp'],
-  //   capabilityProbe: ['--version'],
-  //   configDirName: '.gemini',
-  //   capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image' }],
-  // },
+  {
+    id: 'gemini-cli-acp',
+    displayName: 'Gemini CLI (ACP)',
+    // ⚠️ kind 现用 placeholder 'claude-code'：AgentKind 联合尚无 'gemini-cli'。
+    // 需在 types.ts 的 AgentKind 增加 'gemini-cli' 后再改此字段（超连接器 scope），
+    // 否则 dispatch 时可能被误识别为 claude-code 家族。装 gemini 后即可 detect 命中，
+    // kind 修正前仅保证「可发现 / 可接入」，能力匹配请以 capabilities 为准。
+    kind: 'claude-code',
+    binaryName: 'gemini',
+    // Google @google/gemini-cli 的 ACP 入口：官方走 `gemini --acp` flag；
+    // 个别版本为 subcommand `acp`（对照 kimi）。本机未装，故以下按官方 flag 填，
+    // 安装后请实测 `gemini acp --help` vs `gemini --acp --version` 二选一校正。
+    spawnArgs: ['--acp'],
+    capabilityProbe: ['--version'],
+    configDirName: '.gemini',
+    // gemini 支持多模态 image 输入；description 与 kimi 对齐（AgentCapability.description 可省，给全更清晰）。
+    capabilities: [...ACP_DEFAULT_CAPABILITIES, { id: 'image', description: 'Accept image content in prompt' }],
+  },
 ]
 
 /**

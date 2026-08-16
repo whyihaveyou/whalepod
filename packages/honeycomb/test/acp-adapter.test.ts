@@ -264,6 +264,29 @@ test('AcpAdapter.detect: PATH shim + 空 capabilityProbe → descriptor.acp 被�
   }
 })
 
+test('ACP detect 两态: kimi-code-acp(已装,PATH shim) 命中 / gemini-cli-acp(未装) null', async () => {
+  // 确定性：不真 spawn live agent，用合成 PATH shim 模拟 kimi「已装」态，
+  // gemini 未装（本机与 CI 皆然）即「未装」态。能力探针 `kimi --help` exit 0 即命中。
+  const shimDir = mkdtempSync(join(tmpdir(), 'acp-kimi-shim-'))
+  try {
+    const shim = join(shimDir, 'kimi')
+    writeFileSync(shim, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const host = { ...collectHostEnvironment(), env: { PATH: `${shimDir}:${process.env.PATH ?? ''}` } }
+    const kimi = ACP_CATALOG.find((e) => e.id === 'kimi-code-acp')
+    const gemini = ACP_CATALOG.find((e) => e.id === 'gemini-cli-acp')
+    assert.ok(kimi, 'kimi-code-acp 应在 catalog')
+    assert.ok(gemini, 'gemini-cli-acp 应在 catalog')
+    // 已装态：kimi 出现在 PATH(shim) -> capabilityProbe exit 0 -> 命中 descriptor
+    const kimiHit = await new AcpAdapter(kimi!).detect(host)
+    assert.ok(kimiHit, 'kimi-code-acp 已装(PATH shim)应 detect 命中')
+    // 未装态：gemini 不在 PATH -> detector 返回 null（不 spawn）
+    const geminiMiss = await new AcpAdapter(gemini!).detect(host)
+    assert.equal(geminiMiss, null, 'gemini-cli-acp 未装应 detect 返回 null')
+  } finally {
+    rmSync(shimDir, { recursive: true, force: true })
+  }
+})
+
 // =====================================================================
 // 4. 会话生命周期 —— mock ACP 二进制
 // =====================================================================
@@ -617,6 +640,23 @@ test('ACP_CATALOG: 含 kimi-code-acp 且字段与实测对齐（spawnArgs=acp, c
   const capIds = kimi!.capabilities.map((c) => c.id)
   assert.ok(capIds.includes('image'), `kimi-code-acp 应有 image capability, got: ${capIds}`)
   assert.ok(capIds.includes('streaming'), `kimi-code-acp 应继承 streaming capability, got: ${capIds}`)
+})
+
+test('ACP_CATALOG: 含 gemini-cli-acp 且字段可入册（本机未装 → detect 未装语义）', () => {
+  const gemini = ACP_CATALOG.find((e) => e.id === 'gemini-cli-acp')
+  assert.ok(gemini, 'gemini-cli-acp 应在 catalog 内')
+  assert.equal(gemini!.binaryName, 'gemini')
+  assert.equal(gemini!.configDirName, '.gemini')
+  // ACP 入口官方为 `gemini --acp`（个别版本 subcommand `acp`，安装后实测校正）
+  assert.deepEqual(gemini!.spawnArgs, ['--acp'])
+  assert.deepEqual(gemini!.capabilityProbe, ['--version'])
+  // image capability（gemini 多模态）；description 给全与 kimi 对齐
+  const capIds = gemini!.capabilities.map((c) => c.id)
+  assert.ok(capIds.includes('image'), `gemini-cli-acp 应有 image capability, got: ${capIds}`)
+  assert.ok(capIds.includes('streaming'), `gemini-cli-acp 应继承 streaming capability, got: ${capIds}`)
+  // kind 暂为 placeholder 'claude-code'（AgentKind 无 'gemini-cli'，待 types.ts 补后修正）——
+  // 只影响能力匹配的家族标签，不影响「未装→detect null」语义。
+  assert.equal(gemini!.kind, 'claude-code')
 })
 
 test('bootstrapAcpAdapters: 把每个 catalog 项实例化为可 detect 的 AcpAdapter', async () => {
