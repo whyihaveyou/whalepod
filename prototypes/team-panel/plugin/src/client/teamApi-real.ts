@@ -33,8 +33,8 @@ import type {
   SpawnTemplate,
   Task,
   TaskStatus,
-  TeamApi,
 } from "../../../src/types";
+import type { TeamApi } from "../../../src/services/api";
 
 // ------------------------------------------------------------
 // 配置
@@ -125,11 +125,18 @@ function toActivity(item: ActivityItem): ActivityEvent {
     };
   }
   const t = item.task;
+  const kind: ActivityEvent["kind"] =
+    t.status === "completed"
+      ? "task_done"
+      : t.status === "in-progress"
+        ? "task_start"
+        : "task_create";
   return {
     id: t.id,
     ts: t.createdAt,
-    kind: "task",
+    kind,
     text: `${t.subject} → ${t.status}`,
+    refTaskId: t.id,
   };
 }
 
