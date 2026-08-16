@@ -46,6 +46,8 @@ https://github.com/whyihaveyou/whalepod/releases/latest/download/appcast.xml
 - **两条 enclosure**（Full DMG + Slim ZIP），各自带 `length` + 自定义 `sha256` 属性。
 - `url` 是 **release 资产文件名**（相对路径），消费端拼到 `releases/latest/download/` 前缀。
 
+> 历史精确性注记：实际发布的 alpha.4 appcast 的 Full enclosure 是泛名 `HarnessShell.dmg`（手动档显式传 FULL_DMG=泛名，item 内 url===asset 名自洽）；示例中的品牌名 Full enclosure 自 **alpha.5 起**才生效（make-dmg.sh DMG_NAME 覆盖 + release.yml 对齐）。两档 item 各自内部自洽即可，M1 updater 按 item 内 url 拉取各能命中。
+
 ### 1.2 ⚠️ M1 parser 缺口（M2 必须改）
 
 M1 `UpdaterService.parseAppcast*` 只抓**第一条** `<enclosure url>`（single urlRegex / `firstCapture`）→ 永远拿到 **Full DMG**。M2 需改为：
