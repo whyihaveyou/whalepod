@@ -857,6 +857,10 @@ extension MainWindowController {
         stack.addArrangedSubview(updateBannerButton)
 
         updateBanner.addSubview(stack)
+        // 🚨 修复 2026-08-16 启动回归：banner 必须先进视图树，才能激活下面的跨层级约束——
+        // 缺了这行会 NSInvalidArgumentException（无共同祖先），中断 setupUI()，
+        // 导致 serviceManager.start() 永不执行（app 持锁零窗口零服务零日志，阻塞 alpha.4）。
+        contentView.addSubview(updateBanner)
 
         NSLayoutConstraint.activate([
             updateBanner.topAnchor.constraint(
