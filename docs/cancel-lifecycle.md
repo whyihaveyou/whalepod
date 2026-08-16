@@ -286,6 +286,21 @@ native-runtime 的 cancel 走 DSH 会话中止（用 dsh 自身的 stop API）�
 两边实现细节不同，但 RuntimeHandle.cancel() 签名一致，编排循环零分支。
 **待协调事项**：native-runtime 的 SessionEvent 是否会发 `cancelled` 变体？如果不发，native 走 idle 而非 cancelled（但任务状态仍可由 orchestration-loop 归为 cancelled 因 cancelInProgress 标志）。
 
+### 4.1 ⑤ 实现落地（task #01a0087d）
+
+native-runtime 已按 ② 同一套语义接上 cancel（不发明新词，复用既有 loop 入口点）：
+
+- **cancel() 实现**（feature-detect + 降级）：
+  - `typeof agent.cancel === 'function'` → 优先走 DSH 会话原生中断 `agent.cancel('cancelled by honeycomb orchestrator')`；
+  - 无原生 cancel → 降级 `Promise.race([shutdown(), 30s 宽限])`，超时 force kill（对齐 ② 的 feature-detect 降级契约）；
+  - `cancelInProgress` 布尔去重，重复调用幂等（只打一次底层）；
+  - 错误一律吞掉（cancel 是尽力而为）。
+- **cancel 状态按派工粒度归零**：`send()` 重置 `cancelInProgress = false` —— native handle 跨任务复用（同一 DSH 会话多次 followup），上次派工的 cancel 不得污染本次派工的真实失败判定。
+- **cancel-induced 终端 → 成员回 idle 而非 blocked**：`turn/end` 非 completed 且 `cancelInProgress` 时，push `RuntimeEvent('cancelled', { turn, reason, sessionId })` + emit `member/work-state` state `'idle'`（复用 ② 的 idle 改写路径，不发 report / message/created）。
+- 任务事实 `task-cancelled` 仍由 orchestration-loop 既有入口归集（本文件不新增 loop 分支）。
+
+**测试**：`test/native-runtime.test.ts` 新增 3 例（mock ctx + FakeAgent，不起真 dsh）—— 在途取消 → cancelled + idle + 原生 cancel 带 cause；已完成任务再取消 → no-op（无 cancelled、无新业务 emit、不污染后续派工）；重复取消 → 幂等（cancelCalls === 1）。
+
 ## 5. transport 通道（待 #01a004b1-9056）
 
 预留接口位（**不在本轮实现**）：
@@ -313,19 +328,20 @@ POST /hive/:hiveId/task/:taskId/cancel
 | ② AgentSessionHandle pump 区分 cancel-induced done | runtime/agent-runtime.ts | ① | 中（任务事实层需要） | 0.3 天 | ✅ 落地（cancelInProgress 幂等去重 + 泵侧 idle 改写） |
 | ③ 编排循环 dispatch 看门狗调 cancel + 任务事实 cancelled 类型 | consumer/orchestration-loop.ts | ① | 高（把派工超时闭环做对） | 0.5 天 | ✅ 落地（HiveFact 新增 task-cancelled + store fold） |
 | ④ 编排循环 cancelTask 入口 + emit 'cancelled' 事件 | consumer/orchestration-loop.ts | ① ③ | 中（用户/queen 主动 cancel） | 0.5 天 | ✅ 落地（roster.cancelTask? / appendFact? 均 optional，向后兼容） |
-| ⑤ native-runtime cancel 兼容 + 与编排-Pro 协调 | runtime/native-runtime.ts | ① native-runtime 收口 | 中（外部 DSH agent 也要能 cancel） | 1 天 | ⏳ 等 native-runtime 收口 |
+| ⑤ native-runtime cancel 兼容 + 与编排-Pro 协调 | runtime/native-runtime.ts | ① native-runtime 收口 | 中（外部 DSH agent 也要能 cancel） | 1 天 | ✅ 落地（§4.1：feature-detect 原生中断 / 降级 close+30s / cancelInProgress 按派工归零 / cancelled 事件 + idle 改写；test/native-runtime.test.ts +3 例全绿） |
 | ⑥ transport cancel 通道 | transport/ | #01a004b1-9056 决议 | 低（UI 才会用） | 1 天 | ⏳ 等 #01a004b1-9056 |
 | ⑦ E2E 集成测试（dispatch watchdog → cancel → task-cancelled） | test/ | ①②③ | 高（回归防护） | 0.5 天 | ✅ 部分覆盖（test/cancel-dispatch.test.ts 23 例：①-④ 全链路单测；跨进程 E2E 待 ⑤⑥） |
 
 **总估时**：~4 天（不含 transport 决议等待）
 
 **立刻可做（无依赖）**：① ② ③ ④ —— ✅ 全部落地（任务 #01a0052c，test/cancel-dispatch.test.ts 23 例全绿）
-**等依赖**：⑤ 等 native-runtime 收口，⑥ 等 #01a004b1-9056
+**等依赖**：⑤ ✅ 已落地（任务 #01a0087d），⑥ 等 #01a004b1-9056
 
 ## 7. 验证
 
 完成后跑：
 - `pnpm tsx --test test/cancel-dispatch.test.ts`（✅ ①-④ 全链路：registry cancelTask / 胶水 feature-detect + cancelInProgress 泵侧区分 / 看门狗先 cancel 再 failDispatch / cancelTask 入口 + task-cancelled fold，23 例）
+- `pnpm tsx --test test/native-runtime.test.ts`（✅ ⑤：cancel 在途 native 任务 → cancelled + idle、已完成再取消 no-op、重复取消幂等，13 例全绿）
 - `pnpm tsx --test test/connector-cancel.test.ts`（⏳ 待连接器-Pro 交付，契约定锚；交付前不要触碰该文件）
 - `pnpm tsx --test test/orchestration-loop.test.ts`（回归：既有派工算法未被 cancel 改动破坏）
 - `pnpm tsx --test test/persistence.test.ts`（回归：事实 fold 不受 task-cancelled 新词影响）
@@ -334,7 +350,7 @@ POST /hive/:hiveId/task/:taskId/cancel
 
 - 降级路径（stdio close()）的 cancel 触发 'done'(exit 143) 归类为 cancelled，但用户**实际**杀掉子进程的 SIGKILL 信号（exit 137）无法与「system fault kill」区分。当前用 `cancelInProgress` 标志只能覆盖本框架主动 cancel 的场景；外部 SIGKILL 会被误判为 cancelled。建议未来在 SessionEvent 加 `causedBy?: 'cancel' | 'external-signal'` 字段。
 - transport cancel 通道缺权限模型；MVP 阶段只允许 queen 角色（已实现的话）。
-- native-runtime cancel 走 DSH 会话中止后，是否也会发 cancelled 事件？需要与编排-Pro 协调；如果不发，统一用 idle 转移但任务事实归 cancelled。
+- native-runtime 已确认能发 cancelled 事件（cancel-induced `turn/end` aborted → `RuntimeEvent('cancelled')` + idle 转移，任务事实归 cancelled）；无原生 `agent.cancel` 的 DSH 走 close()+30s 降级，超时 force kill，此时终端事件仍按 cancelInProgress 归 cancelled。
 
 ## 9. 排期建议
 

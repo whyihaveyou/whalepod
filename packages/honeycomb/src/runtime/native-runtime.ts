@@ -238,6 +238,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions = {}): MemberR
       let lastTurn = -1
       let lastAssistantText = ''
       let sawToolCall = false
+      // cancel 语义（对齐 ② AgentSessionHandle）：cancelInProgress 去重 + 区分
+      // cancel-induced 中断（成员回收为 idle）与真实失败（成员 blocked）。
+      let cancelInProgress = false
 
       const onSessionEvent = (subject: DshSessionEventSubject, event: DshSessionEvent) => {
         if (!subject || subject.id !== sessionId) return
@@ -305,14 +308,26 @@ export function createNativeRuntime(options: NativeRuntimeOptions = {}): MemberR
                 push('stream', { turn: lastTurn, note: 'idle-without-marker' })
               }
             } else {
-              // 会话失败/中断 → 派生失败态 + 成员 blocked，不回 report
-              push('error', { turn: lastTurn, reason, sessionId })
-              void ctx.emit('member/work-state', {
-                hiveId: member.hiveId,
-                memberId: member.id,
-                state: 'blocked',
-                blockedReason: `native session turn/end=${reason} (${sessionId})`,
-              })
+              if (cancelInProgress) {
+                // cancel-induced 中断（aborted/interrupted/…）：成员回收为 idle，
+                // 不误标 blocked/failed；事件层推 cancelled（胶水层据此回写任务态）。
+                push('cancelled', { turn: lastTurn, reason, sessionId })
+                void ctx.emit('member/work-state', {
+                  hiveId: member.hiveId,
+                  memberId: member.id,
+                  state: 'idle',
+                })
+              } else {
+                // 会话失败/中断 → 派生失败态 + 成员 blocked，不回 report
+                push('error', { turn: lastTurn, reason, sessionId })
+                void ctx.emit('member/work-state', {
+                  hiveId: member.hiveId,
+                  memberId: member.id,
+                  state: 'blocked',
+                  blockedReason: `native session turn/end=${reason} (${sessionId})`,
+                })
+              }
+              awaitingReport = false
             }
             break
           }
@@ -344,6 +359,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions = {}): MemberR
         async send(message: RuntimeMessage): Promise<void> {
           if (disposed) throw new Error('[native-runtime] handle already closed')
           awaitingReport = true
+          // cancel 状态按派工粒度归零：handle 跨任务复用（同一 DSH 会话多次
+          // followup），上次派工的 cancel 不得污染本次派工的真实失败判定。
+          cancelInProgress = false
           lastAssistantText = ''
           const text = buildNativeDirective(message.content, doneMarker)
           agent.followup({
@@ -374,6 +392,45 @@ export function createNativeRuntime(options: NativeRuntimeOptions = {}): MemberR
           if (disposed) return
           agent.cancel('killed by honeycomb orchestrator')
           await shutdown()
+        },
+
+        async cancel(): Promise<void> {
+          // 幂等：cancelInProgress 去重（对齐 ②），重复调用安全。
+          if (cancelInProgress) return
+          cancelInProgress = true
+          // 优先走 DSH 会话自身的中断/abort 机制（结构契约可选项）。
+          const native = agent as { cancel?: (cause?: string) => void }
+          if (typeof native.cancel === 'function') {
+            try {
+              native.cancel('cancelled by honeycomb orchestrator')
+              return
+            } catch {
+              // protocol-level 失败 → 仍走 close 兜底
+            }
+          }
+          // 降级：close() + 30s 优雅窗口（对齐 ② 的 feature-detect 降级契约），
+          // 超时未收尾则强制 kill。best-effort，不向上抛错。
+          let timer: NodeJS.Timeout | undefined
+          try {
+            await Promise.race([
+              shutdown(),
+              new Promise<void>((_resolve, reject) => {
+                timer = setTimeout(
+                  () => reject(new Error('graceful close timeout after 30s')),
+                  30_000,
+                )
+              }),
+            ])
+          } catch {
+            try {
+              agent.cancel('kill after graceful close timeout')
+              await shutdown()
+            } catch {
+              /* swallow */
+            }
+          } finally {
+            if (timer) clearTimeout(timer)
+          }
         },
       }
     },

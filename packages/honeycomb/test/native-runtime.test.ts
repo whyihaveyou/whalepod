@@ -102,6 +102,7 @@ class FakeAgent implements DshAgent {
   status: 'idle' | 'running' = 'idle'
   disposed = false
   canceled: string | undefined
+  cancelCalls = 0
   followups: DshUserMessage[] = []
   readonly session: { id: string; events: unknown[] }
 
@@ -119,6 +120,7 @@ class FakeAgent implements DshAgent {
   }
 
   cancel(cause?: string): void {
+    this.cancelCalls++
     this.canceled = cause
     this.status = 'idle'
   }
@@ -313,6 +315,96 @@ test('close：解绑监听 + dispose', async () => {
   assert.equal(disposeCalls.length, 1)
   await handle.close() // 幂等
   assert.equal(disposeCalls.length, 1)
+})
+
+test('cancel：在途 native 任务 → cancelled 事件 + 成员回收 idle（不误标 blocked）', async () => {
+  const { handle, fire, ctx, member, agents } = await setup()
+  await handle.send({ role: 'queen', content: '执行任务 tE' })
+  const agent = agents[0]
+
+  await handle.cancel()
+  assert.equal(agent.cancelCalls, 1)
+  assert.ok(agent.canceled?.includes('cancelled'), '应走 DSH 会话原生中断')
+
+  // cancel-induced 终端（aborted 中断）→ cancelled 事件 + 成员 idle，而非 error + blocked
+  const events: unknown[] = []
+  const reader = (async () => {
+    for await (const e of handle.events()) {
+      events.push(e)
+      if ((e as { type: string }).type === 'cancelled') break
+    }
+  })()
+  fire({ type: 'turn/start', data: { turn: 1 } })
+  fire({ type: 'turn/end', data: { turn: 1, reason: 'aborted' } })
+  await reader
+
+  const cancelled = events.find((e) => (e as { type: string }).type === 'cancelled')
+  assert.ok(cancelled, '应产出 cancelled 事件')
+  const payload = (cancelled as { payload?: Record<string, unknown> }).payload ?? {}
+  assert.equal(payload.sessionId, handle.sessionId)
+
+  const wstate = ctx.emitted.find((e) => e.name === 'member/work-state')
+  assert.ok(wstate, '应 emit member/work-state')
+  assert.equal((wstate.payload as Record<string, unknown>).state, 'idle', 'cancel-induced 中断 → idle，非 blocked')
+  // 取消不产生完成回写（不发 report / message/created）
+  assert.ok(!ctx.emitted.some((e) => e.name === 'message/created'))
+  void member
+})
+
+test('cancel：任务已完成后再取消 → 不生效（无 cancelled、不污染后续派工）', async () => {
+  const { handle, fire, ctx, agents, collect } = await setup()
+  await handle.send({ role: 'queen', content: '执行任务 tF' })
+  const evPromise = collect(handle)
+  fire({ type: 'turn/start', data: { turn: 1 } })
+  fire({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: `${NATIVE_DONE_MARKER} 交付完成` }] } } })
+  fire({ type: 'turn/end', data: { turn: 1, reason: 'completed' } })
+  const events = await evPromise
+  assert.ok(events.some((e) => (e as { type: string }).type === 'done'))
+  const agent = agents[0]
+  const businessNames = ['member/work-state', 'message/created']
+  const businessEmitCount = () => ctx.emitted.filter((e) => businessNames.includes(e.name)).length
+  const emitsBefore = businessEmitCount()
+
+  await handle.cancel() // 已完成任务上取消 → 语义 no-op
+
+  // 既无 cancelled 事件（后续 aborted 终端也不产出），也无任何新 emit
+  const events2: unknown[] = []
+  const reader = (async () => {
+    for await (const e of handle.events()) {
+      events2.push(e)
+      if ((e as { type: string }).type === 'tool-call') break
+    }
+  })()
+  fire({ type: 'turn/end', data: { turn: 2, reason: 'aborted' } }) // awaitingReport 已消费 → 无产出
+  fire({ type: 'tool/call', data: { toolCall: { name: 'probe' } } }) // 只用于终止有界 reader
+  await reader
+  assert.ok(!events2.some((e) => (e as { type: string }).type === 'cancelled'))
+  assert.equal(businessEmitCount(), emitsBefore, 'cancel 已完成任务不应产生任何新业务 emit')
+  assert.equal(agent.status, 'idle')
+
+  // 新派工不受上次 cancel 污染：真失败仍按 error + blocked 处理
+  await handle.send({ role: 'queen', content: '执行任务 tF2' })
+  const evPromise2 = collect(handle)
+  fire({ type: 'turn/start', data: { turn: 3 } })
+  fire({ type: 'turn/end', data: { turn: 3, reason: 'error' } })
+  const events3 = await evPromise2
+  assert.ok(events3.some((e) => (e as { type: string }).type === 'error'))
+  const wstate2 = ctx.emitted.filter((e) => e.name === 'member/work-state').at(-1)
+  assert.ok(wstate2, '新派工失败应重新 emit member/work-state')
+  assert.equal((wstate2.payload as Record<string, unknown>).state, 'blocked')
+})
+
+test('cancel：重复取消幂等（cancelInProgress 去重，只打一次底层）', async () => {
+  const { handle, agents } = await setup()
+  await handle.send({ role: 'queen', content: '执行任务 tG' })
+  const agent = agents[0]
+
+  await handle.cancel()
+  await handle.cancel()
+  await handle.cancel()
+  assert.equal(agent.cancelCalls, 1, '重复 cancel 只打一次底层')
+  assert.equal(agent.canceled, 'cancelled by honeycomb orchestrator')
+  await handle.close()
 })
 
 test('工具函数：buildNativeDirective / extractReportText', () => {
