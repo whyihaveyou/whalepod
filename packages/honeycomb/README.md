@@ -4,7 +4,7 @@
 >
 > 基于 DeepSeek Harness 的 Cordis 生态构建，蜂巢词汇与协作模型为**概念级重实现**（不依赖、不含 AionUi 代码）。
 
-> **⚠️ 迁移状态**：本包正在做 cordis 全量迁移（编排-Pro 在树上作业），公开 API 以迁移完成后为准；本 README 的 API 参考以当前代码为基线，迁移后若公开签名有变，会增量修订（见文末「状态与文档同步」）。
+> **✅ 迁移状态**：cordis 全量迁移已完成——`framework.ts` 旧 shim 已删除，`Context`/`Service`/事件（`events.ts` `declare module '@deepseek-ai/cordis'`）均直接基于真 cordis；公开 API 即当前代码（`src/`）现状。后续若公开签名有变，本 README 增量修订（见文末「状态与文档同步」）。
 
 ---
 
@@ -51,7 +51,7 @@
 | **Mandate** 权限 | 动作级授权：can / assert / grants | `ctx.mandate` |
 | **hatch** 孵化 | 注册并启动一个新成员（拉起运行时会话） | `ctx.roster.hatch(...)` |
 | **dismiss** 遣散 | 优雅下线成员（协商式，收 shutdown-request） | `ctx.roster.dismiss(...)` |
-| **Session** 会话 | 成员的一次运行实例（`RuntimeHandle`：send/events/close/kill） | `src/runtime/registry.ts` |
+| **Session** 会话 | 成员的一次运行实例（`RuntimeHandle`：send/events/close/kill/**cancel?**） | `src/runtime/registry.ts` |
 | **Runtime** 运行时 | 成员背后的执行器：原生 agent 或外部 CLI connector | `MemberRuntime` 命名注册表 |
 | **Connector** 连接器 | 外部 CLI agent（codex/kimi/opencode/hermes…）适配 | `src/connectors/` |
 
@@ -66,20 +66,21 @@
 └────────┼───────────────────────────────────────────┼──────────────────────────┘
          ▼                                           ▼
 ┌────────────────────── transport ──────────────────────────────────────────────┐
-│   HoneycombTransport (port) · Router(31 端点) · SubscribeCenter(WS 订阅)      │
+│   HoneycombTransport (port) · Router(32 端点) · SubscribeCenter(WS 订阅)      │
 │   NodeHttpAdapter / NodeWsAdapter（真实 HTTP+WS） · MemoryTransport（测试桩）   │
 └──────────────────────────────────┬────────────────────────────────────────────┘
                                    ▼
 ┌────────────────────── 编排核心（Cordis 上下文） ──────────────────────────────┐
 │  ctx.hive  ctx.roster  ctx.ledger  ctx.courier  ctx.mandate  ← 5 个服务        │
-│  consumer/orchestration-loop（queen 派工闭环，事件驱动）                       │
-│  runtime/registry (MemberRuntime) · runtime/fiber (生命周期)                   │
+│  consumer/orchestration-loop（queen 派工闭环，事件驱动；`createOrchestrationLoop` 可装配）│
+│  runtime/registry (MemberRuntime + cancelTask) · runtime/fiber (生命周期)       │
+│  runtime/native-runtime (DSH 原生会话，`createNativeRuntime`)                 │
 │  runtime/agent-runtime (SessionEvent → WorkState 胶水)                        │
 │  connectors/（外部 CLI agent 检测/适配/桥接）                                  │
 └──────────────────────────────────┬────────────────────────────────────────────┘
                                    ▼
 ┌────────────────────── 事件溯源 ───────────────────────────────────────────────┐
-│  HiveFact（13 类事实）→ FactBackend.append（append-only）                      │
+│  HiveFact（14 类事实）→ FactBackend.append（append-only）                      │
 │  JsonlFactBackend：~/.dfh/hive/<hiveId>/facts.ndjson（损坏行跳过+告警）         │
 │  启动时 replay(facts) → 派生快照（Hive/Member/Task/Message 全量恢复）           │
 └───────────────────────────────────────────────────────────────────────────────┘
@@ -92,7 +93,7 @@
 | 领域模型 | 纯数据的 DTO（`Hive/Member/Task/Message`…），零框架依赖 | `src/types.ts` |
 | 5 个服务 | hive / roster / ledger / courier / mandate（公开方法见 §6.2） | `src/services/` |
 | 编排循环 | queen 派工：runnable 判定 → capability 匹配 → 交付闭环 → 阻塞恢复 → 失败重派（事件驱动，不轮询） | `src/consumer/orchestration-loop.ts` |
-| 运行时 | `MemberRuntime` 命名注册表 + `fiber`（hatch/dismiss 托管）+ agent-runtime 胶水 | `src/runtime/` |
+| 运行时 | `MemberRuntime` 命名注册表 + `cancelTask`（cancel 链路）+ `fiber`（hatch/dismiss 托管）+ agent-runtime 胶水 + **native-runtime（DSH 原生会话）** | `src/runtime/` |
 | 连接器 | 外部 CLI agent 的 detect/spawn/事件标准化 | `src/connectors/` |
 | 传输 | HTTP/WS 服务端 + 内存桩 + 类型化客户端 SDK | `src/transport/` |
 | 持久化 | 事实日志 + 重放 → 快照 | `src/persistence/` |
@@ -157,22 +158,24 @@ cd packages/honeycomb
 npm run example        # 或按 examples/hive-quickstart/README.md 的指引
 ```
 
-- 当前示例默认走 **mock 驱动**（把「建 hive → 孵化 → 建任务 → 派工 → 交付 → courier 消息 → 落盘恢复」显式演出来，确定、可读）；想切到真实的 `consumer/orchestration-loop.ts` 事件驱动循环，见 examples/hive-quickstart/README.md「切到真编排循环」一节（含模板代码 + 两处已知阻塞 bug 说明，需循环 owner 先修，任务边界不改 src/）；
+- 当前示例默认走 **mock 驱动**（把「建 hive → 孵化 → 建任务 → 派工 → 交付 → courier 消息 → 落盘恢复」显式演出来，确定、可读）；想切到真实的 `consumer/orchestration-loop.ts` 事件驱动循环，见 examples/hive-quickstart/README.md「切到真编排循环」一节（模板代码；循环本身已修复并正式导出为 `createOrchestrationLoop`，见 §6.8）；
 - 想改行为参数（如 `idleTimeoutMs`、runtimes），见 §6.5 `HoneycombConfig` 字段表。
 
 ---
 
 ## 六、API 参考
 
-> transport 端点的**完整契约**（31 个 REST 端点清单、WS 消息 schema、错误码）见 **`../../docs/honeycomb-transport-api.md`**（仓库根 `docs/` 下的权威文档，本 README 只做摘要与 SDK 用法，不重复）。事件主题清单见 §6.4。
+> transport 端点的**完整契约**（REST 端点清单、WS 消息 schema、错误码）见 **`../../docs/honeycomb-transport-api.md`**（仓库根 `docs/` 下的权威文档，本 README 只做摘要与 SDK 用法，不重复）。端点计数口径：服务端 Router 当前注册 **32 个端点**（hive 7 + member 8 + task 8 + message 6 + mandate 3，task 域含 `POST /v1/tasks/{id}/cancel`）；docs 端点到表若显示 31 属快照滞后，以本行口径为准。事件主题清单见 §6.4。
 
 ### 6.1 入口与装配
 
 | 入口 | 签名 | 语义 |
 | --- | --- | --- |
-| `apply` | `apply(ctx: Context, config?: HoneycombConfig): Promise<void>` | 装配 5 个服务 + 持久化 + 运行时 + 可选 transport server |
+| `apply` | `apply(ctx: Context, config?: HoneycombConfig): Promise<void>` | 装配 5 个服务 + 持久化 + 运行时（含默认 `'native'` runtime）+ 可选 transport server |
 | `createNodeTransportServer` | `(ctx, opts?: { host?, port?, wsPath? }) → Promise<NodeTransportServerHandle>` | 起真实 HTTP+WS 服务；`host` 默认 `127.0.0.1`，`port` 默认 `0`（随机；注意与 `config.transport` 的默认 `8765` 不同），`wsPath` 默认 `/ws`；句柄含 `{ transport, host, port, close() }` |
 | `createHoneycombClient` | `(opts: HoneycombClientOptions) → HoneycombClient` | 前端类型化客户端（见 §6.7） |
+| `createOrchestrationLoop` | `(deps: OrchestrationLoopDeps, config?: OrchestrationLoopConfig) → OrchestrationLoop` | 事件驱动派工闭环（见 §6.8） |
+| `createNativeRuntime` | `(options?: NativeRuntimeOptions) → MemberRuntime` | DSH 原生会话运行时（`apply` 已默认注册；可再注册自配实例） |
 
 ### 6.2 五个服务的公开方法（以 `src/services/` 现状为准）
 
@@ -200,8 +203,8 @@ npm run example        # 或按 examples/hive-quickstart/README.md 的指引
 | rename | `rename(hiveId, memberId, name) → Promise<void>` | 改名 |
 | dismiss | `dismiss(hiveId, memberId) → Promise<void>` | 遣散（优雅下线，走 shutdown 协商） |
 | state | `state(hiveId, memberId) → Promise<MemberStateView>` | 状态视图：`{ memberId, status, workState, blockedReason?, queued: {foreground, background}, activeTurnId? }` |
-| registerRuntime | `registerRuntime(runtime: MemberRuntime) → Promise<void>` | 注册命名运行时后端（如 `'native'`） |
-| listRuntimes | `listRuntimes() → Promise<MemberRuntime[]>` | 已注册运行时 |
+| registerRuntime | `registerRuntime(runtime: MemberRuntime) → void` | 注册命名运行时后端（如 `'native'`） |
+| listRuntimes | `listRuntimes() → MemberRuntime[]` | 已注册运行时 |
 | sendTo | `sendTo(hiveId, memberId, msg: RuntimeMessage) → Promise<boolean>` | 向成员会话投递指令（store/forward）；`RuntimeMessage = { role, content }` |
 
 **`ctx.ledger`（LedgerService）** — 任务账本：
@@ -255,7 +258,7 @@ npm run example        # 或按 examples/hive-quickstart/README.md 的指引
 
 ### 6.4 事件主题清单（`HiveEventMap`，`src/events.ts`）
 
-WS 推送主题与进程内事件表**同一套**（`subscribe.ts` 的 `PUSHED_TOPICS`）：
+WS 推送主题 = `subscribe.ts` 的 `PUSHED_TOPICS`（下表 11 个；`connectors/*`、waterfall hooks 为**进程内**事件，不进 WS 推送，见下）：
 
 | 主题 | payload | 触发 |
 | --- | --- | --- |
@@ -270,6 +273,11 @@ WS 推送主题与进程内事件表**同一套**（`subscribe.ts` 的 `PUSHED_T
 | `task/updated` | `{ task, change: 'status'\|'owner'\|'dependency'\|'description' }` | 任务更新（含依赖/owner 变更） |
 | `message/created` | `{ message }` | 新消息 |
 | `message/read` | `{ hiveId, messageId }` | 消息已读 |
+
+> 进程内事件（cordis `Events` 接口，**不**进 WS 推送、不展开在 `HiveEventMap`）：
+> - 连接器：`connectors/registered`、`connectors/discovered`、`connectors/cache-invalidated`（`connectors/registry.ts`）；
+> - waterfall hooks（continuation 链，`ctx.waterfall`）：`courier/outgoing`（改写/拦截外发消息，常量 `CourierOutgoing`）、`mandate/decide`（审计/覆盖授权决策，常量 `MandateDecide`）。
+> 订阅这些主题对 WS 无意义（不会收到推送帧）；本地 `ctx.events` 监听或 harness 侧才可观察到。
 
 ### 6.5 HoneycombConfig 全字段（`src/config.ts`）
 
@@ -287,13 +295,13 @@ WS 推送主题与进程内事件表**同一套**（`subscribe.ts` 的 `PUSHED_T
 
 ### 6.6 transport 端点摘要（完整契约见 `../../docs/honeycomb-transport-api.md`）
 
-REST 共 **31 个端点**，按域划分（wire 信封统一为 `{ status, body: { ok:true, data } | { ok:false, error:{ code, message } } }`；JSON query 参数如 `filter/cursor/scope` 为**单次 URLSearchParams 编码**）：
+REST 共 **32 个端点**，按域划分（wire 信封统一为 `{ status, body: { ok:true, data } | { ok:false, error:{ code, message } } }`；JSON query 参数如 `filter/cursor/scope` 为**单次 URLSearchParams 编码**）：
 
 | 域 | 端点 |
 | --- | --- |
 | hive | create / list / get / rename / set-mode / session / remove（7） |
 | member | register / hatch / list / get / state / rename / dismiss / remove（8） |
-| task | create / list / get / update / owner / dependencies(+/-)（7） |
+| task | create / list / get / update / owner / dependencies(+/-) / **cancel**（8） |
 | message | send / deliver / inbox / mark-read / broadcast / feed（6） |
 | mandate | can / assert / grants（3） |
 
@@ -328,12 +336,42 @@ await client.close()                 // 永久关闭（同一实例不再自动�
 - `on(topic, handler)` 返回取消订阅函数；`connected` 为**就绪语义**（socket 已 OPEN 且重连补订全部 ack 完成）；
 - 类型全部 `import type` 自包内 DTO（`types.ts` / `transport/types.ts` / `events.ts`），前端无需另造类型；
 - 零运行时第三方依赖（`globalThis.fetch` + 平台 WebSocket）。
+- 注：REST 的 `POST /v1/tasks/{id}/cancel`（cancel ⑥ transport 通道）为服务端已注册端点；client 侧 `task.cancel` 方法随 transport 通道落地后一并补封装。
+
+### 6.8 编排循环（`consumer/orchestration-loop.ts`，`createOrchestrationLoop`）
+
+事件驱动派工闭环，`apply` 不自动装配（需要时才挂）：
+
+```ts
+import { createOrchestrationLoop } from '@whalepod/honeycomb'
+
+const loop = createOrchestrationLoop(ctx, {
+  idleTimeoutMs: 0,               // 永不闲置回收（默认 15min，`DEFAULT_IDLE_TIMEOUT_MS`）
+  maxDispatchAttempts: 3,         // `DEFAULT_MAX_DISPATCH_ATTEMPTS`
+  dispatchTimeoutMs: 5 * 60_000,  // `DEFAULT_DISPATCH_TIMEOUT_MS`
+})
+await loop.start()
+loop.on('dispatched', ({ taskId, memberId }) => {})
+// 完成/失败/阻塞/解阻塞等事件统一经 `LoopEvent` 联合类型
+await loop.cancelTask(hiveId, taskId, 'queen 否决')   // 取消在飞任务（写 task-cancelled 事实 + 广播 cancelled）
+await loop.stop()
+```
+
+- 循环语义：监听到可执行任务触发派工；派工先经 capability 匹配成员；超时/失败有看门狗收回（失败重派，attempts 内）；`cancelTask` → `roster.cancelTask`（trigger `RuntimeHandle.cancel` 30s 窗口，feature-detect 降级为 `close`）→ 任务置 `cancelled`；
+- `OrchestrationLoopConfig` 可复用 §6.5 的 `IdleTimeoutConfig` 语义；`LoopEvent` 含循环内部事件（dispatched/completed/failed/blocked/unblocked/cancelled/...），供面板/监听方使用。
+
+### 6.9 cancel 链路（①-④ 已实现）
+
+- `RuntimeHandle.cancel?(): Promise<void>`：运行时**可选**实现优雅取消（`AgentSession` feature-detect；无则降级关闭会话）；
+- `RuntimeRegistry.trackHandle/handleFor/untrackHandle` + `cancelTask(memberId, options?)`：`registry` 维护 memberId → handle 索引，`cancelTask` 在 30s 窗口内先 `cancel` 再 `kill`；
+- `roster.cancelTask(hiveId, memberId)`：把 `ledger` 侧在飞任务置 `cancelled` + 写 `task-cancelled` 事实 + emit `task/updated { change:'status' }`；
+- 编排循环的派工看门狗：先 `cancel` 再 `failDispatch`，避免在飞任务悬空。
 
 ---
 
 ## 七、事件溯源：事实日志与重放
 
-### 7.1 事实词汇（`HiveFact`，共 13 类）
+### 7.1 事实词汇（`HiveFact`，共 14 类）
 
 | 事实 | 字段 | 说明 |
 | --- | --- | --- |
@@ -348,6 +386,7 @@ await client.close()                 // 永久关闭（同一实例不再自动�
 | `task-created` | `{ task }` | 全量任务快照 |
 | `task-updated` | `{ taskId, patch }` | 增量更新 |
 | `task-dependency` | `{ taskId, blockedBy, op: 'add'\|'remove' }` | 依赖边变更 |
+| `task-cancelled` | `{ taskId, memberId, reason }` | 任务取消（cancel 链路） |
 | `message-created` | `{ message }` | 全量消息快照 |
 | `message-read` | `{ messageId }` | 已读 |
 
@@ -375,6 +414,9 @@ npx tsx test/smoke.ts                        # 传输层 smoke（REST 信封 + W
 npx tsx --test test/transport-client.test.ts # client SDK 7 用例：方法映射/错误解包/重连补订/ack-before-ready/WS_UNAVAILABLE
 npx tsx --test test/persistence.test.ts      # 事实日志落盘 + 重放 + 损坏容忍
 npx tsx --test test/e2e-core.test.ts         # 核心端到端（services×persistence×events）
+npx tsx --test test/orchestration-loop.test.ts # 编排循环（派工/看门狗/cancelTask）
+npx tsx --test test/native-runtime.test.ts   # DSH 原生会话运行时（编队成员可用）
+npx tsx --test test/runtime.test.ts          # registry/cancel 链路（trackHandle/cancelTask）
 npm run example        # 活示例 = examples/hive-quickstart/index.ts（详见其 README）
 ```
 
@@ -385,9 +427,9 @@ npm run example        # 活示例 = examples/hive-quickstart/index.ts（详见�
 | 事项 | 状态 |
 | --- | --- |
 | 5 个服务 + 事件溯源 + transport（服务端 + client SDK） | ✅ 已实现，测试绿 |
-| 编排循环（queen 派工） | ✅ 已实现（含看门狗） |
+| 编排循环 + **cancel 链路**（RuntimeHandle.cancel / roster.cancelTask / 看门狗 cancel-then-failDispatch / task-cancelled 事实） | ✅ 已实现（含看门狗；cancel ①-④ 已合入 main） |
 | 连接器（外部 CLI agent 适配） | ✅ 已实现（opencode 实测过链路） |
-| **cordis 全量迁移**（framework shim → 真 `@deepseek-ai/cordis`） | 🔄 进行中（编排-Pro）——迁移后若公开 API 有变，本 README 由 实现-Pro-2 增量修订 |
-| 品牌收束（`@whalepod/honeycomb` → `@whalepod/honeycomb`、鲸群 WhalePod 更名） | ⏳ 待执行（见任务板【品牌收束】） |
+| **cordis 全量迁移**（framework shim → 真 `@deepseek-ai/cordis`） | ✅ 已完成——`Context`/`Service`/事件均直接基于真 cordis（`framework.ts` 已删）；后续若公开签名有变，本 README 增量修订 |
+| 品牌收束（`@dfh/honeycomb` → `@whalepod/honeycomb`、鲸群 WhalePod 更名） | ✅ 已执行（本 README 与包内 `package.json`/源码均统一为 `@whalepod/honeycomb`） |
 
-文档基线：`2026-08-14`（以当前代码为准）。
+文档基线：`2026-08-16`（以当前代码为准）。
