@@ -34,11 +34,11 @@ Apple Silicon 开发机上用 `swift build --arch x86_64` 交叉编出真 x86_64
 
 | 项 | 结果 | 证据 |
 | --- | --- | --- |
-| `swift build --arch x86_64` | PASS 52s | CLT 自带 x86_64 slice，本地交叉编译可用 |
+| `swift build --arch x86_64` | PASS 52s | CLT 自带 x86_64 slice，本地交叉编译可用（scratch 隔离 `/tmp/intel-scratch`） |
 | 交叉产物为**真 x86_64** | PASS | `file` 确认 Mach-O x86_64（非 arm64 误报） |
 | `build-runtime.sh ARCH=x64` | PASS | 正确下载 `node-v22.17.0-darwin-x64.tar.xz` + `dsh@0.1.0-rc.6` |
-| Rosetta 冒烟 `env -i + arch -x86_64` | PASS | SELFTEST 36/36，x64 node / dsh CLI 可跑 |
-| Slim-Intel | PASS | ≈1.1MB zip，内含真 x86_64 二进制 |
+| Rosetta 冒烟 `env -i + arch -x86_64` | PASS | **WHALEPOD_SELFTEST 36/36 PASS**，x64 node / dsh CLI 可跑 |
+| Slim-Intel | PASS | `WhalePod-0.1.0-macos-x86_64-slim.zip` ≈1.1MB，sha256 `7d6d5bc0109f3638d6ef218459ed87655abe1ba108b1659fe9b2ed7b43d12d5c` |
 
 > 关键坑：构建阶段必须用 `SCRATCH_PATH` 隔离（见 §4.1），否则 `.build/release` 软链会指回上次宿主 arm64 产物，
 > 出现「zip 写 x86_64 但内容却是 arm64」的静默错误。
