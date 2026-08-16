@@ -75,6 +75,7 @@ export class NodeHttpAdapter {
       // OPTIONS 预检
       if (req.method === 'OPTIONS') {
         res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, X-Honey-Actor',
           'Content-Length': '0',
@@ -101,12 +102,16 @@ export class NodeHttpAdapter {
       }
       res.writeHead(httpRes.status, {
         'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
         'Content-Length': Buffer.byteLength(payload),
       })
       res.end(payload)
     } catch (error) {
       const payload = JSON.stringify({ ok: false, error: { code: 'INTERNAL', message: String(error) } })
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.writeHead(500, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+      })
       res.end(payload)
     }
   }
