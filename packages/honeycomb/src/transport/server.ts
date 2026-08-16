@@ -20,6 +20,7 @@ import { NodeHttpAdapter } from './http'
 import { NodeWsAdapter } from './ws'
 import { createHoneycombTransport } from './core'
 import type { HoneycombTransport } from './port'
+import type { TransportOptions } from './port'
 
 export interface NodeTransportServerOptions {
   /** 监听地址；默认 127.0.0.1。 */
@@ -28,6 +29,8 @@ export interface NodeTransportServerOptions {
   port?: number
   /** WS 挂载路径；默认 `/ws`。 */
   wsPath?: string
+  /** transport 装配选项（auth / orchestration —— cancel 通道门面从此挂钩）。 */
+  transport?: TransportOptions
 }
 
 export interface NodeTransportServerHandle {
@@ -46,7 +49,7 @@ export async function createNodeTransportServer(
   ctx: import('@deepseek-ai/cordis').Context,
   options: NodeTransportServerOptions = {},
 ): Promise<NodeTransportServerHandle> {
-  const transport = createHoneycombTransport(ctx)
+  const transport = createHoneycombTransport(ctx, options.transport ?? {})
 
   const host = options.host ?? '127.0.0.1'
   const http = new NodeHttpAdapter(transport, { host, port: options.port ?? 0 })

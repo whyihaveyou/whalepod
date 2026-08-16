@@ -24,6 +24,10 @@ export function createHoneycombTransport(
     courier: ctx.get('courier'),
     mandate: ctx.get('mandate'),
     roster: ctx.get('roster'),
+    // cancel 通道门面（可选）：装配方把 createOrchestrationLoop 句柄从
+    // options.orchestration 传进来；缺省时 POST /tasks/{id}/cancel 对在途
+    // 任务返回 503 ORCHESTRATION_UNAVAILABLE，其余路径不受影响。
+    orchestration: options.orchestration,
   }
   const transport = new HoneycombTransport(ctx, services as any, options)
   registerAllRoutes(transport)

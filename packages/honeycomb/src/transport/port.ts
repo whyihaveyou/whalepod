@@ -34,6 +34,26 @@ export interface TransportServices {
   courier: CourierService
   mandate: MandateService
   roster: RosterService
+  /**
+   * 编排循环门面（可选，cancel 通道的唯一接触面）。
+   *
+   * 结构类型而非 `OrchestrationLoop` 本体 —— transport 不需要 import consumer
+   * 层（依赖方向 §1.3：transport 只依赖 service + 结构类型），且
+   * `createOrchestrationLoop(deps).cancelTask(hiveId, taskId, reason)` 恰好满足。
+   * 装配方（生产/测试）把整个 loop 句柄或仅其 cancelTask 裁剪面传进来即可。
+   *
+   * 未挂钩时 POST /v1/tasks/{id}/cancel 对 in-progress 任务返回
+   * `503 ORCHESTRATION_UNAVAILABLE`；非在途任务的 409/幂等路径不依赖本门面。
+   */
+  orchestration?: TransportOrchestration
+}
+
+/**
+ * 编排循环调用面（cancel 普测 §3.6）：transport 唯一需要的一个方法。
+ * 与 `OrchestrationLoop.cancelTask` 签名结构兼容。
+ */
+export interface TransportOrchestration {
+  cancelTask(hiveId: string, taskId: string, reason: string): Promise<void>
 }
 
 /** transport 可选鉴权（§6.2）：从请求解析操作者；返回 null 表示匿名。 */
@@ -45,6 +65,8 @@ export interface TransportAuth {
 export interface TransportOptions {
   /** 启用鉴权则对变更端点先 mandate.assert；默认关闭。 */
   auth?: TransportAuth | false
+  /** 编排循环门面（cancel 通道）；未提供则 POST /tasks/{id}/cancel 对在途任务返回 503。 */
+  orchestration?: TransportOrchestration
 }
 
 /** JSON 查询参数解析（`?filter={...}` 等）。 */

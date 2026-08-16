@@ -10,7 +10,7 @@
 
 import type { HoneycombTransport } from './port'
 import type { HttpRequest, HttpResponse } from './types'
-import { fail, ok } from './types'
+import { accepted, fail, ok } from './types'
 
 // ---------------------------------------------------------------------------
 // hive — 团队服务（→ HiveService）
@@ -216,6 +216,72 @@ export function registerMandateRoutes(t: HoneycombTransport): void {
   })
 }
 
+// ---------------------------------------------------------------------------
+// orchestration — cancel 通道（任务停止按钮底座，cancel-lifecycle §3.6）
+// ---------------------------------------------------------------------------
+
+export function registerOrchestrationRoutes(t: HoneycombTransport): void {
+  /**
+   * POST /v1/tasks/{id}/cancel —— 取消 in-progress 任务。
+   *
+   * 语义（docs/honeycomb-transport-api.md §3.6）：
+   *  - 任务不存在               → 409 TASK_NOT_FOUND
+   *  - status in-progress       → 调编排循环 cancelTask（看门狗 disarm + 底层
+   *    graceful cancel + task-cancelled 事实），返回 202 + 取消后任务快照；
+   *    - 编排循环未挂钩          → 503 ORCHESTRATION_UNAVAILABLE
+   *  - status cancelled（重复调用）→ 幂等：202 + 当前快照，不再写事实
+   *  - status completed（终态）  → 409 TASK_TERMINAL
+   *    （注：TaskStatus 词表无 'failed' —— 失败语义走任务事实/事件侧，快照
+   *      无此状态；终端态在此模型里只有 completed / cancelled）
+   *  - status backlog / blocked → 409 TASK_NOT_RUNNING（提示用 PATCH 直接置 cancelled）
+   *
+   * hiveId 不要求显式传入（任务 id 全局唯一，经 ledger.get 回查后补）。
+   */
+  t.registerRoute('POST', '/v1/tasks/{id}/cancel', async (req) => {
+    const { id } = t.pathParams(req, '/v1/tasks/{id}/cancel')
+    const task = await t.services.ledger.get(id)
+    if (!task) {
+      return fail('TASK_NOT_FOUND', `task not found: ${id}`, 409)
+    }
+    // 幂等：重复 cancel（任务已 cancelled）→ 直接回最新快照，不再二次写事实
+    if (task.status === 'cancelled') {
+      return accepted(task)
+    }
+    if (task.status === 'completed') {
+      return fail(
+        'TASK_TERMINAL',
+        `task ${id} already terminal (${task.status}); cannot cancel`,
+        409,
+      )
+    }
+    if (task.status !== 'in-progress') {
+      // 剩余分支：backlog / blocked —— 均未在途，不可经本端点取消
+      return fail(
+        'TASK_NOT_RUNNING',
+        `task ${id} is ${task.status}; only in-progress tasks can be cancelled via this endpoint ` +
+          '(retire backlog tasks via PATCH /v1/hives/{hiveId}/tasks/{id})',
+        409,
+      )
+    }
+    const orchestration = t.services.orchestration
+    if (!orchestration) {
+      return fail(
+        'ORCHESTRATION_UNAVAILABLE',
+        'no orchestration loop attached to this transport; cannot dispatch cancel',
+        503,
+      )
+    }
+    const reason =
+      typeof req.body?.reason === 'string' && req.body.reason.trim()
+        ? req.body.reason
+        : 'via transport'
+    await orchestration.cancelTask(task.hiveId, id, reason)
+    // 回读最新快照（cancelTask 已同步写 status=cancelled + owner=null）
+    const after = await t.services.ledger.get(id)
+    return accepted(after ?? task)
+  })
+}
+
 /** 注册全部 REST 路由（§3 全部端点）。 */
 export function registerAllRoutes(t: HoneycombTransport): void {
   registerHiveRoutes(t)
@@ -223,4 +289,5 @@ export function registerAllRoutes(t: HoneycombTransport): void {
   registerLedgerRoutes(t)
   registerCourierRoutes(t)
   registerMandateRoutes(t)
+  registerOrchestrationRoutes(t)
 }

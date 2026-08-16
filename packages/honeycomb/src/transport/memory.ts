@@ -18,7 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { HoneycombTransport } from './port'
-import type { HttpAdapter, WsAdapter } from './port'
+import type { HttpAdapter, TransportOptions, WsAdapter } from './port'
 import { createHoneycombTransport } from './core'
 import { SubscribeCenter } from './subscribe'
 import type { HttpRequest, HttpResponse, WsConn, WsMessage } from './types'
@@ -159,9 +159,14 @@ export interface MemoryTransportHandle {
  * 调用时机：在 service 已 provide 到 ctx 之后（即 honeycomb 插件应用之后）。
  * 这里 `services` 直接取 `ctx` 上已注入的服务（`ctx.hive/roster/ledger/courier/mandate`），
  * 与插件注入保持一致，避免重复实例化。
+ *
+ * `options.transport`（auth / orchestration）与网络版同语义。
  */
-export function createMemoryTransport(ctx: Context): MemoryTransportHandle {
-  const transport = createHoneycombTransport(ctx)
+export function createMemoryTransport(
+  ctx: Context,
+  options: { transport?: TransportOptions } = {},
+): MemoryTransportHandle {
+  const transport = createHoneycombTransport(ctx, options.transport ?? {})
 
   const http = new MemoryHttpAdapter()
   transport.attachHttp(http)

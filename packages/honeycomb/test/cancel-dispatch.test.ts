@@ -797,6 +797,87 @@ test('persistence — task-cancelled 事实 fold 写入 snapshot（status=cancel
   assert.ok(t)
   assert.equal(t!.status, 'cancelled')
   assert.equal(t!.updatedAt, 100)
+  // memberId='w1' 只做审计留在事实里，绝不回写快照 owner ——
+  // （防 owner 复活：真实链路 task-updated 已把 owner 清空）
+  assert.equal(t!.owner, undefined)
+})
+
+test('persistence — task-cancelled 在 owner 已被指派后 fold：owner 清空不回写 memberId', async () => {
+  // 锁定真实链路顺序：task-created → task-updated(owner=w1, in-progress)
+  //   → task-updated(cancelled, owner 清空) → task-cancelled(memberId=w1 审计)
+  // 最终快照 owner 必须为空（两条事实 fold 顺序无关收敛到「无主」）。
+  const { replay } = await import('../src/persistence/store')
+  const facts = [
+    {
+      seq: 1,
+      at: 0,
+      hiveId: 'h1',
+      fact: {
+        type: 'hive-created',
+        hive: { id: 'h1', name: 'h1', createdAt: 0, updatedAt: 0 },
+      },
+    },
+    {
+      seq: 2,
+      at: 0,
+      hiveId: 'h1',
+      fact: {
+        type: 'task-created',
+        task: {
+          id: 't1',
+          hiveId: 'h1',
+          subject: 'demo',
+          status: 'backlog',
+          createdAt: 0,
+          updatedAt: 0,
+          blockedBy: [],
+          blocks: [],
+          requires: [],
+        },
+        at: 0,
+      },
+    },
+    {
+      seq: 3,
+      at: 10,
+      hiveId: 'h1',
+      fact: {
+        type: 'task-updated',
+        taskId: 't1',
+        patch: { status: 'in-progress', owner: 'w1' },
+        at: 10,
+      },
+    },
+    {
+      seq: 4,
+      at: 50,
+      hiveId: 'h1',
+      fact: {
+        type: 'task-updated',
+        taskId: 't1',
+        patch: { status: 'cancelled', owner: undefined },
+        at: 50,
+      },
+    },
+    {
+      seq: 5,
+      at: 60,
+      hiveId: 'h1',
+      fact: {
+        type: 'task-cancelled',
+        taskId: 't1',
+        memberId: 'w1',
+        reason: 'user abort via transport',
+        at: 60,
+      },
+    },
+  ] as any
+  const snap = replay(facts)
+  const t = snap.tasks.get('t1')
+  assert.ok(t)
+  assert.equal(t!.status, 'cancelled')
+  assert.equal(t!.owner, undefined) // 关键：绝不能复活为 'w1'
+  assert.equal(t!.updatedAt, 60)
 })
 
 test('persistence — task-cancelled 叠加 task-updated（status=cancelled）→ 幂等更新', async () => {
@@ -861,4 +942,5 @@ test('persistence — task-cancelled 叠加 task-updated（status=cancelled）�
   assert.ok(t)
   assert.equal(t!.status, 'cancelled')
   assert.equal(t!.updatedAt, 60)
+  assert.equal(t!.owner, undefined)
 })

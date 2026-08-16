@@ -161,12 +161,14 @@ function applyFact(snapshot: HiveSnapshot, fact: HiveFact): void {
       //    status，不写 task-updated），task-cancelled 也足以把任务置 cancelled。
       //  - 反之亦然：applyTask 写了 status='cancelled'，task-cancelled
       //    仍记录 who/why/at 三个语义字段。
+      // owner 一律清空（任务不再被任何成员持有，与 ledger.setOwner 的
+      // null→undefined 归一化同归一）；memberId 只留在事实里做审计，绝不回写
+      // 快照 —— 否则两条事实按序 fold 时，后者（task-cancelled）会把前者
+      // （task-updated owner 清空）又改写回旧 worker（owner 复活 bug）。
       const task = snapshot.tasks.get(fact.taskId)
       if (task) {
         task.status = 'cancelled'
-        if (fact.memberId !== null) {
-          task.owner = fact.memberId
-        }
+        task.owner = undefined
         task.updatedAt = fact.at
       }
       break

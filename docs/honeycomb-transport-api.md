@@ -159,7 +159,31 @@ export interface WsAdapter {
 | `POST` | `/v1/hives/{hiveId}/tasks/{id}/dependency` | `ledger.addDependency(id,blockedBy)` | `body = { blockedBy }` |
 | `DELETE` | `/v1/hives/{hiveId}/tasks/{id}/dependency` | `ledger.removeDependency(id,blockedBy)` | `body = { blockedBy }` |
 
-### 3.4 `message`（信使 → `CourierService`）
+### 3.4 `orchestration`（编排循环 cancel 通道 → `OrchestrationLoop`，任务停止按钮底座）
+
+| 方法 | 路径 | 调用 | 说明 |
+| --- | --- | --- | --- |
+| `POST` | `/v1/tasks/{id}/cancel` | `orchestration.cancelTask(hiveId,id,reason)` | 取消在途任务（见下） |
+
+`POST /v1/tasks/{id}/cancel` —— 任务停止按钮底座（cancel-lifecycle §3.6）。任务 id 全局唯一，hiveId 由 transport 经 `ledger.get(id)` 回查后补，前端不必携带。
+
+**请求体**：`{ reason?: string }`（可选；缺省 "via transport"，写入 task-cancelled 事实供审计）。
+
+**成功响应**：`202 Accepted` + 统一信封 `{ ok: true, data: task }` —— `data` 为取消后的任务快照（`status = cancelled`，`owner` 清空）。202（而非 200）表达「受理、graceful 窗口内收敛」语义：REST 返回时刻编排层已落 `task-cancelled` 事实并触发底层 `handle.cancel()`，运行时的成员 work-state 回落经 WS 另行推送（不阻塞响应）。
+
+**分支语义**（全部确定性）：
+
+| 任务状态 | 结果 |
+| --- | --- |
+| 不存在 | `409 TASK_NOT_FOUND` |
+| `in-progress`（在途） | 调 `orchestration.cancelTask：` 看门狗 disarm + applyTask(cancelled) + `task-cancelled` 事实 + `roster.cancelTask` 优雅通道（fire-and-forget 30s 窗口）+ 重派扫描 → `202` + 快照。**编排循环未挂钩本 transport** → `503 ORCHESTRATION_UNAVAILABLE` |
+| `cancelled`（重复调用） | **幂等**：`202` + 当前快照；不再二次写事实 / 不再二次触发底层 cancel（事实里的 reason 恒为首次） |
+| `completed`（终态） | `409 TASK_TERMINAL`（注：TaskStatus 词表无 `failed` —— 失败语义走任务事实/事件侧，快照终态仅 completed / cancelled 二态） |
+| `backlog` / `blocked`（未在途） | `409 TASK_NOT_RUNNING` —— 本端点只取消在途任务；出队类取消请用 `PATCH /v1/hives/{hiveId}/tasks/{id}` 直接置 `cancelled`（不产 task-cancelled 事实，适合「未派工就作废」） |
+
+**WS 联动**（无新消息类型，复用事实广播链）：cancel 成功后订阅端从既有 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时的成员 work-state 回落则走既有 `member/work-state` 帧（编排 Pro/native-runtime 链路收口后自然到达）。
+
+### 3.5 `message`（信使 → `CourierService`）
 
 | 方法 | 路径 | 调用 service | 说明 |
 | --- | --- | --- | --- |
@@ -170,7 +194,7 @@ export interface WsAdapter {
 | `POST` | `/v1/hives/{hiveId}/broadcast` | `courier.broadcast(hiveId,from,content)` | `body = { from, content }` |
 | `GET` | `/v1/hives/{hiveId}/activity` | `courier.feed(hiveId,cursor?,limit?)` | `query.cursor`,`query.limit`（活动流） |
 
-### 3.5 `mandate`（授权 → `MandateService`）
+### 3.6 `mandate`（授权 → `MandateService`）
 
 | 方法 | 路径 | 调用 service | 说明 |
 | --- | --- | --- | --- |
@@ -237,6 +261,8 @@ transport 订阅 honeycomb 的**全部 emit 事件**（`Events` 合并表），�
 - 带完整对象（如 `{ hive }`、`{ task }`、`{ message }`）→ 取对象的 `hiveId`；
 - `hive/created` 推给订阅 `"*"`（广播）的连接与即将存在的 hive；`hive/removed` 推给原订阅者。
 
+**cancel 路径复用本表（无新 topic）**：`POST /v1/tasks/{id}/cancel`（§3.4）成功后，订阅端从 `task/updated` 帧看到 `payload.task.status === 'cancelled'`；运行时成员 work-state 回落走既有 `member/work-state` 帧（⑤ native-runtime 收口后自然到达）。
+
 ### 4.4 跨 hive 广播
 
 前端可订阅 `"*"` 以接收不限 hive 的事件（如 `hive/created` 列表刷新）。订阅 `"*"` 时收到所有事件，事件帧的 `hiveId` 字段让前端可过滤。
@@ -252,6 +278,7 @@ transport 订阅 honeycomb 的**全部 emit 事件**（`Events` 合并表），�
 | `LedgerService` | `ctx.ledger` | `/v1/hives/{hiveId}/tasks` | `task/*` |
 | `CourierService` | `ctx.courier` | `/v1/hives/{hiveId}/messages`, `/inbox`, `/broadcast`, `/activity` | `message/*` |
 | `MandateService` | `ctx.mandate` | `/v1/mandate/*` | （无事件，纯查询） |
+| `OrchestrationLoop`（结构接口 `TransportOrchestration`） | `options.transport.orchestration`（装配方显式挂钩，非 ctx 注入） | `/v1/tasks/{id}/cancel` | （无新事件，复用 `task/updated` 广播链） |
 
 **注入方式**：transport 在 `apply(ctx)` 时经 `ctx.inject(['hive','roster','ledger','courier','mandate'], ...)` 拿到服务，构造 `HoneycombTransport`，再挂到 `HttpAdapter` / `WsAdapter` 上，并 `ctx.on(each event, filter→push)`。
 
@@ -267,6 +294,12 @@ transport 订阅 honeycomb 的**全部 emit 事件**（`Events` 合并表），�
 | `403` | `FORBIDDEN` | `MandateDeniedError` / `MessageDroppedError`（dropped→`400` 亦可） |
 | `404` | `NOT_FOUND` | `get` 未命中 |
 | `409` | `CONFLICT` | 状态冲突（如派工/删除在途） |
+| `409` | `TASK_NOT_FOUND` | cancel：任务不存在（区别于 GET 的 404 —— 前端停止按钮的幂等错误族） |
+| `409` | `TASK_TERMINAL` | cancel：任务已 `completed` 终态，不可取消 |
+| `409` | `TASK_NOT_RUNNING` | cancel：任务 `backlog` / `blocked` 未在途（出队类取消用 PATCH） |
+| `503` | `ORCHESTRATION_UNAVAILABLE` | cancel：transport 未挂钩编排循环门面（options.transport.orchestration 未提供） |
+
+其余正常状态码：变更常规返回 `200`；cancel 受理类返回 `202`（异步收敛语义，见 §3.4）。
 
 错误响应统一：
 

@@ -39,6 +39,14 @@ export function ok<T>(data: T): HttpResponse {
   return { status: 200, body: { ok: true, data } }
 }
 
+/**
+ * 202 Accepted —— 变更已被受理但效果异步收敛（用于 cancel 这类
+ * 「graceful 窗口内完成」的操作）。body 结构与 ok() 相同。
+ */
+export function accepted<T>(data: T): HttpResponse {
+  return { status: 202, body: { ok: true, data } }
+}
+
 /** 统一错误响应（§6.1）。 */
 export function fail(code: string, message: string, status = 400): HttpResponse {
   return { status, body: { ok: false, error: { code, message } } }
