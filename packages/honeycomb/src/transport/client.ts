@@ -163,6 +163,8 @@ class ClientImpl implements HoneycombClient {
       this.request('POST', `/v1/hives/${hiveId}/tasks/${id}/dependency`, { body: { blockedBy } }),
     removeDependency: (hiveId, id, blockedBy) =>
       this.request('DELETE', `/v1/hives/${hiveId}/tasks/${id}/dependency`, { body: { blockedBy } }),
+    cancel: (id, reason) =>
+      this.request('POST', `/v1/tasks/${id}/cancel`, reason ? { body: { reason } } : undefined),
   }
 
   readonly message: MessageClientApi = {

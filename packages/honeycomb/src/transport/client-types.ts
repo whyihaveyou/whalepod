@@ -89,6 +89,15 @@ export interface TaskClientApi {
   setOwner(hiveId: HiveId, id: TaskId, owner: MemberId | null): Promise<true>
   addDependency(hiveId: HiveId, id: TaskId, blockedBy: TaskId[]): Promise<true>
   removeDependency(hiveId: HiveId, id: TaskId, blockedBy: TaskId[]): Promise<true>
+  /**
+   * 取消在途任务：`POST /v1/tasks/{id}/cancel`（唯一非 hive 作用域的端点，taskId
+   * 全局唯一）。成功返回取消后的任务快照（status=cancelled）；失败抛
+   * `HoneycombTransportError`，code 矩阵：`TASK_NOT_FOUND` / `TASK_TERMINAL` /
+   * `TASK_NOT_RUNNING`（409 三分）与 `ORCHESTRATION_UNAVAILABLE`（503，编排循环
+   * 未挂钩——部署内嵌模式时不会出现）。对已 cancelled 任务重复调用幂等（仍 202 +
+   * 最新快照，不二次写事实）。`reason` 可选，透传进 task-cancelled 事实。
+   */
+  cancel(id: TaskId, reason?: string): Promise<Task>
 }
 
 /** message 域（§3.4）。 */
@@ -136,7 +145,7 @@ export interface HoneycombClient {
   on<K extends keyof HiveEventMap>(topic: K, handler: (payload: HiveEventMap[K]) => void): () => void
   /**
    * 主动关闭：停重连、关 socket、清处理器与缓存订阅。**永久性**——同一实例 close 后
-   * 不再自动重连，如需复用请新建实例（new createHoneycombClient）。
+   * 不再自动重连，如需复用请新建实例（createHoneycombClient）。
    */
   close(): Promise<void>
 }

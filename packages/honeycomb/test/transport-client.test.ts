@@ -71,18 +71,28 @@ type FakeWsCtor = (new (url: string) => FakeWsInstance) & { instances: FakeWsIns
 interface Fixture {
   client: ReturnType<typeof createHoneycombClient>
   lastUrl: { current: string | null }
+  /** 最近一次 HTTP 请求的方法/路径/body（cancel 用例断言 URL 构造与 body 透传）。 */
+  lastReq: { current: { url: string; method: string; body?: unknown } | null }
   fakeWs: FakeWsCtor
   dispose(): Promise<void>
 }
 
-async function setup(options?: { reconnect?: { baseMs: number; maxMs: number } }): Promise<Fixture> {
+async function setup(options?: {
+  reconnect?: { baseMs: number; maxMs: number }
+  /** 注入编排门面的工厂（cancel 202 路径需要；不传则取消在途任务返回 503）。 */
+  makeOrchestration?: (ctx: Context) => { cancelTask(hiveId: string, taskId: string, reason: string): Promise<void> }
+}): Promise<Fixture> {
   const ctx = new Context()
   const pDir = join(tmpdir(), `dfh-client-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
   await apply(ctx, { persistenceDir: pDir })
   ctx.roster.registerRuntime(fakeRuntime())
-  const t: MemoryTransportHandle = createMemoryTransport(ctx)
+  const t: MemoryTransportHandle = createMemoryTransport(
+    ctx,
+    options?.makeOrchestration ? { transport: { orchestration: options.makeOrchestration(ctx) } } : undefined,
+  )
 
   const lastUrl = { current: null as string | null }
+  const lastReq: Fixture['lastReq'] = { current: null }
 
   // fetch → t.http.dispatch：解析 URL（path + query）、读取 JSON body，返回信封。
   const fakeFetch = (async (input: unknown, init?: RequestInit) => {
@@ -95,6 +105,7 @@ async function setup(options?: { reconnect?: { baseMs: number; maxMs: number } }
       query[key] = value
     })
     const body = init?.body != null ? JSON.parse(String(init.body)) : undefined
+    lastReq.current = { url, method, body }
     const res = await t.http.dispatch(method as any, u.pathname, query, body)
     return { status: res.status, json: async () => res.body } as unknown as Response
   }) as typeof globalThis.fetch
@@ -171,6 +182,7 @@ async function setup(options?: { reconnect?: { baseMs: number; maxMs: number } }
   return {
     client,
     lastUrl,
+    lastReq,
     fakeWs: FakeWebSocket as unknown as FakeWsCtor,
     dispose: async () => t.dispose(),
   }
@@ -462,6 +474,104 @@ test('WS: 重连补订等 ack 后才置就绪（HIGH-1/MED-5）', async () => {
       '重连补订帧应已发出',
     )
 
+    await c.close()
+  } finally {
+    await fx.dispose()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 7. REST：task.cancel —— URL 构造 / 202 + reason 透传 / 幂等 202 / 409 三分（#01a00998）
+// ---------------------------------------------------------------------------
+test('REST: task.cancel 202（reason 透传 + URL 断言）+ 幂等重复 + 409 三分', async () => {
+  const cancelCalls: Array<{ hiveId: string; taskId: string; reason: string }> = []
+  const fx = await setup({
+    // 编排门面假实现：记录入参并把任务翻成 cancelled（对账真循环 loop.cancelTask 的效果）
+    makeOrchestration: (bootCtx) => ({
+      cancelTask: async (hiveId, taskId, reason) => {
+        cancelCalls.push({ hiveId, taskId, reason })
+        await bootCtx.ledger.update(taskId, { status: 'cancelled' })
+      },
+    }),
+  })
+  try {
+    const c = fx.client
+    const hive = await c.hive.create({ name: 'cancel-corner', workspace: '/tmp/c' })
+    const worker = await c.member.hatch(hive.id, { name: 'w', backend: 'native' })
+
+    // 在途任务：cancel → 202 + 取消后快照；方法/路径/body 逐一断言
+    const t1 = await c.task.create(hive.id, { subject: 'in-flight' })
+    await c.task.update(hive.id, t1.id, { status: 'in-progress' })
+    await c.task.setOwner(hive.id, t1.id, worker.id)
+    const snap = await c.task.cancel(t1.id, 'operator stop')
+    assert.equal(snap.status, 'cancelled', '快照应反映取消后状态')
+    assert.equal(fx.lastReq.current?.method, 'POST')
+    assert.ok(
+      fx.lastReq.current?.url.endsWith(`/v1/tasks/${t1.id}/cancel`),
+      `路径应为 /v1/tasks/:id/cancel，实际 ${fx.lastReq.current?.url}`,
+    )
+    assert.deepEqual(fx.lastReq.current?.body, { reason: 'operator stop' }, 'reason 应随 body 透传')
+    assert.equal(cancelCalls.length, 1, '编排门面应被调用恰好一次')
+    assert.equal(cancelCalls[0].hiveId, hive.id, 'router 应从任务行推导 hiveId 传入')
+    assert.equal(cancelCalls[0].taskId, t1.id)
+    assert.equal(cancelCalls[0].reason, 'operator stop')
+
+    // 幂等：已 cancelled 再 cancel → 仍 202 + 同一快照，编排门面不再被调用
+    const snap2 = await c.task.cancel(t1.id)
+    assert.equal(snap2.status, 'cancelled')
+    assert.equal(cancelCalls.length, 1, '重复 cancel 应短路，不二次入编排')
+    assert.equal(fx.lastReq.current?.body, undefined, '未给 reason 时不应带 body')
+
+    // 409 TASK_NOT_FOUND
+    await assert.rejects(c.task.cancel('task_nope'), (err) => {
+      assert.ok(err instanceof HoneycombTransportError)
+      const e = err as HoneycombTransportError
+      assert.equal(e.code, 'TASK_NOT_FOUND')
+      assert.equal(e.status, 409)
+      return true
+    })
+
+    // 409 TASK_TERMINAL（completed）
+    const t2 = await c.task.create(hive.id, { subject: 'done' })
+    await c.task.update(hive.id, t2.id, { status: 'completed' })
+    await assert.rejects(c.task.cancel(t2.id), (err) => {
+      assert.ok(err instanceof HoneycombTransportError)
+      const e = err as HoneycombTransportError
+      assert.equal(e.code, 'TASK_TERMINAL')
+      assert.equal(e.status, 409)
+      return true
+    })
+
+    // 409 TASK_NOT_RUNNING（新建任务非 in-progress）
+    const t3 = await c.task.create(hive.id, { subject: 'queued' })
+    await assert.rejects(c.task.cancel(t3.id), (err) => {
+      assert.ok(err instanceof HoneycombTransportError)
+      const e = err as HoneycombTransportError
+      assert.equal(e.code, 'TASK_NOT_RUNNING')
+      assert.equal(e.status, 409)
+      return true
+    })
+
+    await c.close()
+  } finally {
+    await fx.dispose()
+  }
+})
+
+test('REST: task.cancel 503 —— 编排未挂钩（ORCHESTRATION_UNAVAILABLE）', async () => {
+  const fx = await setup() // 不注入编排门面
+  try {
+    const c = fx.client
+    const hive = await c.hive.create({ name: 'no-orch', workspace: '/tmp/n' })
+    const t1 = await c.task.create(hive.id, { subject: 'in-flight' })
+    await c.task.update(hive.id, t1.id, { status: 'in-progress' })
+    await assert.rejects(c.task.cancel(t1.id), (err) => {
+      assert.ok(err instanceof HoneycombTransportError)
+      const e = err as HoneycombTransportError
+      assert.equal(e.code, 'ORCHESTRATION_UNAVAILABLE')
+      assert.equal(e.status, 503)
+      return true
+    })
     await c.close()
   } finally {
     await fx.dispose()
