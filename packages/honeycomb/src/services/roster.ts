@@ -49,6 +49,13 @@ export interface RosterService {
    * no backend), so the caller can treat it as a failed dispatch.
    */
   sendTo(hiveId: HiveId, id: MemberId, message: RuntimeMessage): Promise<boolean>
+
+  /**
+   * Cancel the member's in-flight runtime session (queen-side cancel seam,
+   * cancel ① 装配线: roster → RuntimeRegistry.cancelTask → RuntimeHandle.cancel).
+   * Best-effort & idempotent: silently no-ops when no handle is tracked, never throws.
+   */
+  cancelTask(hiveId: HiveId, id: MemberId): Promise<void>
 }
 
 export interface RosterServiceDeps {
@@ -118,6 +125,8 @@ export class HoneycombRosterService extends Service implements RosterService {
     try {
       const handle = await runtime.hatch(this.ctx, { member, cwd, env: {} })
       this.fibers.adopt(member.id, handle)
+      // cancel ① 生产装配：句柄同时登记进 RuntimeRegistry，供 cancelTask 幂等透传。
+      this.runtimes.trackHandle(member.id, handle)
       await this.store.append(hiveId, {
         type: 'member-status',
         memberId: member.id,
@@ -154,6 +163,7 @@ export class HoneycombRosterService extends Service implements RosterService {
 
   async remove(hiveId: HiveId, id: MemberId): Promise<void> {
     await this.fibers.dispose(id)
+    this.runtimes.untrackHandle(id)
     await this.store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
     this.ctx.emit('member/dismissed', { hiveId, memberId: id })
   }
@@ -165,6 +175,7 @@ export class HoneycombRosterService extends Service implements RosterService {
 
   async dismiss(hiveId: HiveId, id: MemberId): Promise<void> {
     await this.fibers.dispose(id)
+    this.runtimes.untrackHandle(id)
     await this.store.append(hiveId, { type: 'member-dismissed', memberId: id, at: now() })
     this.ctx.emit('member/dismissed', { hiveId, memberId: id })
   }
@@ -196,5 +207,9 @@ export class HoneycombRosterService extends Service implements RosterService {
     if (!fiber?.handle) return false
     await fiber.handle.send(message)
     return true
+  }
+
+  async cancelTask(_hiveId: HiveId, id: MemberId): Promise<void> {
+    await this.runtimes.cancelTask(id)
   }
 }

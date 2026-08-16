@@ -70,8 +70,8 @@ export interface Task {
   subject: string
   description?: string
   status: TaskStatus
-  /** 拥有者（可空 = 未指派） */
-  owner?: MemberId
+  /** 拥有者（可空 = 未指派；null 为显式未指派，undefined 同等容忍——见 store.setOwner 归一化） */
+  owner?: MemberId | null
   /** 依赖边：被哪些任务阻塞 */
   blockedBy: TaskId[]
   /** 反向边：阻塞了哪些任务（派生，便于查询） */
@@ -121,7 +121,7 @@ export interface CreateHiveInput {
 export interface CreateTaskInput {
   subject: string
   description?: string
-  owner?: MemberId
+  owner?: MemberId | null
   blockedBy?: TaskId[]
 }
 

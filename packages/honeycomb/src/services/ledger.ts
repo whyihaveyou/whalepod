@@ -43,7 +43,9 @@ export class HoneycombLedgerService extends Service implements LedgerService {
       subject: input.subject,
       description: input.description,
       status: 'backlog',
-      owner: input.owner,
+      // unclaimed 口径统一为 null（缺省归一化）：loop.pickTask 过滤 owner===null；
+      // 此前 REST 创建缺省时落 undefined，派工谓词永不命中（⑦ E2E 实链暴露的真缺口）。
+      owner: input.owner ?? null,
       blockedBy: [],
       blocks: [],
       createdAt: ts,
