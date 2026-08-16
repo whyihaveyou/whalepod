@@ -73,18 +73,22 @@ npm install ./honeycomb-tarball/whalepod-honeycomb-*.tgz --omit=dev
 
 ## Q5 最小改动集 + 风险表
 
+**⚠️ 前置阻断项（2026-08-16 实现-Pro-1 实测发现）**：`@whalepod/honeycomb` 当前 lib/ 产物在 **Node ESM 下不可 import**——tsconfig `moduleResolution: bundler` 使 tsc 产出 74 处无扩展名相对导入（`import './context'`），Node ESM 首行即 `ERR_MODULE_NOT_FOUND`。**即使发到 npm，消费者 import 也必炸**。phase 2 第 0 步必须先修：tsconfig 改 `node16`/`nodenext`（tsc 自动给 ESM 输出补 `.js` 扩展）+ 重建 lib + 全量测试回归 + 真 Node ESM import 冒烟。
+
 **Phase 2 改动清单**（全部 Scripts/数据面，零 Swift 零 src/ 冻结面）：
 | # | 文件/动作 | 内容 |
 |---|---|---|
+| 0 | `packages/honeycomb/tsconfig.json` | moduleResolution → nodenext（构建配置非接口面），修 ESM 扩展名阻断 |
 | 1 | `packages/honeycomb` 构建产物 | `npm pack` 出 tarball（CI/本地同命令） |
 | 2 | `HarnessShell/Scripts/build-runtime.sh` | npm install 追加 honeycomb tarball（同事务，peer 去重） |
 | 3 | profile seed 脚本（新增） | 幂等写 honeycomb 插件行进 DSH_HOME/profiles/web/cordis.patch.yml + 包同步（依 V1/V2 结论定形态） |
-| 4 | 验证步骤 | requireNodeModulesIdentity cordis 单实例断言 + verify-load 冒烟 + 面板连 :4800 真数据 |
+| 4 | 验证步骤 | requireNodeModulesIdentity cordis 单实例断言 + verify-load 冒烟（真 Node ESM import）+ 面板连 :4800 真数据 |
 
 **风险表**：
 | 风险 | 等级 | 缓解 |
 |---|---|---|
 | cordis 双实例（honeycomb 自带一份） | 高 | peerDependency 已声明；同事务 install 去重；落地跑 identity 断言 |
+| **lib 产物 Node ESM 不可 import**（前置阻断） | **高** | phase 2 第 0 步修 tsconfig nodenext + 全量回归 + 真 import 冒烟 |
 | 版本漂移（honeycomb vs dsh-cordis） | 中 | tarball 文件名锁版本 + 构建时校验 cordis 版本区间 |
 | profile 自举不认外部依赖（V1 不通过） | 中 | 降级路线 A（Swift --patch）或 Resources→profile sync |
 | 体积膨胀 | 低 | ~1-2MB，无感 |
@@ -98,4 +102,4 @@ npm install ./honeycomb-tarball/whalepod-honeycomb-*.tgz --omit=dev
 2. **npm pack tarball** 进 build-runtime.sh 同事务安装（peer 去重 + 离线可复现）。
 3. **独立端口 4800**（alpha 固定，面板发现机制不变）。
 4. **零 Swift 路线 B 优先**（profile patch + node_modules 注入），V1-V3 验证不过则路线 A（Swift 需求清单已备好，不动手）。
-5. phase 2 实施：编排-Pro 牵头，按上表 4 步走，第一步先跑 V1-V3 验证。
+5. phase 2 实施：编排-Pro 牵头——第 0 步先修 honeycomb ESM 产物阻断（见 Q5 前置项），再跑 V1-V3 验证，然后按上表 1-4 步走。
