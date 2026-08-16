@@ -52,7 +52,11 @@ echo "==> profile=$PROFILE  dsh-home=$DSH_HOME  apply=$APPLY"
 [ -f "$SRC/package.json" ] || { echo "❌ src 不是 honeycomb 包目录: $SRC" >&2; exit 2; }
 [ -f "$SRC/lib/index.js" ] || { echo "❌ src 缺 lib/index.js（先 npm run build）: $SRC" >&2; exit 2; }
 
-# 演练模式：对 /tmp 副本操作，不写装机
+# 演练模式：对 /tmp 副本操作，不写装机。
+# ⚠️ demo 每次 rm -rf $DEMO_DIR 重建全新副本 → 「同一目录连跑两遍」在 demo 下
+#   不可复现（第二遍必然是新目录）。幂等验证请用真写沙盒：
+#   ./Scripts/profile-seed-honeycomb.sh --apply --dsh-home /tmp/<沙盒> --src packages/honeycomb
+#   连跑 2+ 遍，run 2 应「共享层跳过 + insert 跳过」，honeycomb 条目数恒 1。
 if [ "$APPLY" -ne 1 ]; then
   DEMO_DIR="/tmp/profile-seed-demo"
   rm -rf "$DEMO_DIR"
