@@ -11,7 +11,7 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@whalepod/honeycomb": ["../../../../packages/honeycomb/src/index.ts"]
+      "@whalepod/honeycomb": ["../../../packages/honeycomb/src/index.ts"]
     }
   }
 }

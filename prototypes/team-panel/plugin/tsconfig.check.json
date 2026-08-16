@@ -15,7 +15,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@whalepod/honeycomb": ["../../../../packages/honeycomb/src/index.ts"]
+      "@whalepod/honeycomb": ["../../../packages/honeycomb/src/index.ts"]
     }
   },
   "include": ["src", "../src"]
