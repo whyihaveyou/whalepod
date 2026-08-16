@@ -7,6 +7,8 @@ import Foundation
 /// 对齐 spikes/auto-update/appcast.xml 的 fixture。
 enum UpdaterSelfTest {
 
+    /// 双 enclosure fixture：每条 item 含 Full(.dmg) + Slim(.zip)，各带自定义 sha256 + length。
+    /// 对齐 Flash-1 make-appcast.sh 真实格式（通用文件名，不假设品牌风格）。
     static let fixtureAppcast = """
     <?xml version="1.0" encoding="utf-8"?>
     <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
@@ -16,17 +18,48 @@ enum UpdaterSelfTest {
           <title>Version 0.1.0-alpha.5</title>
           <sparkle:shortVersionString>0.1.0-alpha.5</sparkle:shortVersionString>
           <sparkle:version>5</sparkle:version>
-          <enclosure url="WhalePod-0.1.0-alpha.5-macos-arm64-full.dmg" sparkle:version="5" length="1" type="application/octet-stream"/>
+          <enclosure url="WhalePod-0.1.0-alpha.5-macos-arm64.dmg" sparkle:version="5" length="206000000" type="application/octet-stream" sha256="AAA5"/>
+          <enclosure url="WhalePod-0.1.0-alpha.5-macos-arm64-slim.zip" sparkle:version="5" length="1100000" type="application/octet-stream" sha256="BBB5"/>
         </item>
         <item>
           <title>Version 0.1.0-alpha.4</title>
           <sparkle:shortVersionString>0.1.0-alpha.4</sparkle:shortVersionString>
           <sparkle:version>4</sparkle:version>
-          <enclosure url="WhalePod-0.1.0-alpha.4-macos-arm64-full.dmg" sparkle:version="4" length="1" type="application/octet-stream"/>
+          <enclosure url="HarnessShell.dmg" sparkle:version="4" length="200000000" type="application/octet-stream" sha256="AAA4"/>
+          <enclosure url="HarnessShell-slim.zip" sparkle:version="4" length="1000000" type="application/octet-stream" sha256="BBB4"/>
         </item>
       </channel>
     </rss>
     """
+
+    /// 单 enclosure fixture（只有 Full .dmg）——验证「另一档缺失 → fallback 不崩」。
+    static let singleEnclosureAppcast = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+      <channel>
+        <item>
+          <sparkle:shortVersionString>0.1.0-alpha.6</sparkle:shortVersionString>
+          <sparkle:version>6</sparkle:version>
+          <enclosure url="only-full.dmg" sparkle:version="6" length="1000" type="application/octet-stream" sha256="FFF6"/>
+        </item>
+      </channel>
+    </rss>
+    """
+
+    /// 假想「Contents/Resources」目录：含/不含 `node` → Full/Slim 档位判定用。
+    /// 返回的 URL 即充当 resourceURL（= real 的 Bundle.main.resourceURL），
+    /// `Tier.resolve` 会查其下的 `node` 是否存在。
+    private static func fakeResourceURL(withNode: Bool) -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("whalepod-selftest-\(withNode)-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true
+        )
+        if withNode {
+            FileManager.default.createFile(atPath: dir.appendingPathComponent("node").path, contents: nil)
+        }
+        return dir
+    }
 
     static func run() -> Never {
         var failures: [String] = []
@@ -44,17 +77,69 @@ enum UpdaterSelfTest {
 
         print("[selftest] UpdaterService M1 确定性断言")
 
-        // 1) 解析：两档全部解出，build 正确
+        // 1) 双 enclosure 解析：两档全部解出，build 正确
         let parsed = UpdaterService.parseAppcastString(fixtureAppcast)
         check("解析出条目", parsed?.count == 2, "got \(parsed?.count ?? -1)")
         check("条目0 build=5", parsed?[0].build == 5)
         check("条目1 build=4", parsed?[1].build == 4)
-        check("条目含 enclosure url", parsed?[1].enclosureURL != nil)
+
+        // 1a) 条目0 双 enclosure 齐全，sha256 + length 正确捕获
+        let p0 = parsed?[0]
+        check("条目0 full 命中 .dmg", p0?.full?.url == "WhalePod-0.1.0-alpha.5-macos-arm64.dmg")
+        check("条目0 full sha256=AAA5", p0?.full?.sha256 == "AAA5")
+        check("条目0 full length=206000000", p0?.full?.length == 206_000_000)
+        check("条目0 slim 命中 .zip", p0?.slim?.url == "WhalePod-0.1.0-alpha.5-macos-arm64-slim.zip")
+        check("条目0 slim sha256=BBB5", p0?.slim?.sha256 == "BBB5")
+        check("条目0 slim length=1100000", p0?.slim?.length == 1_100_000)
+
+        // 1b) 条目1（泛名 alpha.4）也按扩展名识别，不依赖文件名风格
+        let p1 = parsed?[1]
+        check("条目1 full 仍识别 .dmg", p1?.full?.url == "HarnessShell.dmg")
+        check("条目1 slim 仍识别 .zip", p1?.slim?.url == "HarnessShell-slim.zip")
 
         // 2) 取最新：按 build 5（整数主键）
         let latest = parsed.flatMap { UpdaterService.latestItem($0) }
         check("最新 build=5", latest?.build == 5, "got \(latest?.build ?? -1)")
         check("最新 shortVersion=alpha.5", latest?.shortVersion == "0.1.0-alpha.5")
+
+        // 2a) 档位判定：Contents/Resources 含 node = Full，否则 Slim
+        check("Tier: 有 node → full", UpdaterService.Tier.resolve(resourceURL: fakeResourceURL(withNode: true)) == .full)
+        check("Tier: 无 node → slim", UpdaterService.Tier.resolve(resourceURL: fakeResourceURL(withNode: false)) == .slim)
+        check("Tier: nil resourceURL → slim", UpdaterService.Tier.resolve(resourceURL: nil) == .slim)
+
+        // 2b) 档位命中：Full 装机 → 命中 .dmg 条；Slim 装机 → 命中 .zip 条
+        if let latest {
+            let fullInfo = latest.asUpdateInfo(for: .full)
+            check("Full 档 tier=full", fullInfo.tier == .full)
+            check("Full 档 sha256=AAA5", fullInfo.expectedSHA256 == "AAA5")
+            check("Full 档 length=206000000", fullInfo.length == 206_000_000)
+            check("Full 档 downloadURL 尾部命中 .dmg", fullInfo.downloadURL?.lastPathComponent == "WhalePod-0.1.0-alpha.5-macos-arm64.dmg")
+            check("Full 档 downloadURL 带 latest/download 前缀",
+                  fullInfo.downloadURL?.absoluteString == "https://github.com/whyihaveyou/whalepod/releases/latest/download/WhalePod-0.1.0-alpha.5-macos-arm64.dmg")
+            check("Full 档 verifyScheme=sha256", fullInfo.verifyScheme == .sha256)
+
+            let slimInfo = latest.asUpdateInfo(for: .slim)
+            check("Slim 档 tier=slim", slimInfo.tier == .slim)
+            check("Slim 档 sha256=BBB5", slimInfo.expectedSHA256 == "BBB5")
+            check("Slim 档 length=1100000", slimInfo.length == 1_100_000)
+            check("Slim 档 downloadURL 尾部命中 .zip", slimInfo.downloadURL?.lastPathComponent == "WhalePod-0.1.0-alpha.5-macos-arm64-slim.zip")
+        }
+
+        // 2c) 单 enclosure fallback：只有 .dmg，Slim 装机 → 另一档缺失，下载 URL 回落 nil 不崩
+        let singleParsed = UpdaterService.parseAppcastString(singleEnclosureAppcast)
+        let singleLatest = singleParsed.flatMap { UpdaterService.latestItem($0) }
+        check("单 enclosure 解析出 1 条", singleParsed?.count == 1)
+        check("单条 build=6", singleLatest?.build == 6, "got \(singleLatest?.build ?? -1)")
+        check("单条 full 识别", singleLatest?.full?.url == "only-full.dmg")
+        check("单条 slim 缺失→nil", singleLatest?.slim == nil)
+        if let singleLatest {
+            let slimInfo = singleLatest.asUpdateInfo(for: .slim)
+            check("单条 slim 档 downloadURL=nil(回落)", slimInfo.downloadURL == nil)
+            check("单条 slim 档 sha256=nil", slimInfo.expectedSHA256 == nil)
+            // 仅 Full/另一条无 .zip 时，Full 档仍正常命中，不窜档
+            let fullInfo = singleLatest.asUpdateInfo(for: .full)
+            check("单条 full 档仍命中", fullInfo.downloadURL?.lastPathComponent == "only-full.dmg")
+        }
 
         // 3) 判定三态（build 整数比较，不碰 semver 字符串）
         guard let latestBuild = latest?.build else {
