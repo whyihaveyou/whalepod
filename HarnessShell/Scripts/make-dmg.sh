@@ -12,6 +12,7 @@
 # 环境变量：
 #   APP_NAME     默认 HarnessShell
 #   DIST_DIR     默认 dist
+#   DMG_NAME     输出文件名，默认 "$APP_NAME.dmg"（传 WhalePod-<ver>-macos-<arch>.dmg 可品牌化）
 #   VOLUME_NAME  挂载卷名，默认 "WhalePod"
 #   SIGN_IDENTITY dmg 签名身份；默认 "-"（ad-hoc，跳过对 dmg 的额外签名）
 #   STAGING_TMP  调试用：保留临时目录（默认清理）
@@ -23,12 +24,13 @@ cd "$ROOT"
 
 APP_NAME="${APP_NAME:-HarnessShell}"
 DIST_DIR="${DIST_DIR:-dist}"
+DMG_NAME="${DMG_NAME:-$APP_NAME.dmg}"
 VOLUME_NAME="${VOLUME_NAME:-WhalePod}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 STAGING_TMP="${STAGING_TMP:-0}"
 
 APP="$DIST_DIR/$APP_NAME.app"
-DMG="$DIST_DIR/$APP_NAME.dmg"
+DMG="$DIST_DIR/$DMG_NAME"
 
 [ -d "$APP" ] || { echo "!! 缺少 $APP，请先运行 Scripts/build-app.sh"; exit 1; }
 
