@@ -443,10 +443,24 @@ final class HarnessServiceManager {
             return v
         }
 
-        for line in text.components(separatedBy: .newlines) {
+        let lines = text.components(separatedBy: .newlines)
+
+        // OOB-F13（alpha.6 发布级 bug）：honeycomb 装箱后 `[honeycomb] transport
+        // listening on http://127.0.0.1:4800` 先于 dsh web 行出现，通用启发式会
+        // 把主窗口锚到 transport 的 404 JSON 页（loadInitialURLIfNeeded 无回退）。
+        // 第一轮专锚 dsh web 自身的监听声明行；找不到才退回通用启发式。
+        for line in lines where line.contains("dsh web") {
+            if let p = extract(urlRe, from: line) ?? extract(hostPortRe, from: line) {
+                return p
+            }
+        }
+
+        for line in lines {
             let ns = line as NSString
             let full = NSRange(location: 0, length: ns.length)
             guard hintRe.firstMatch(in: line, range: full) != nil else { continue }
+            // honeycomb transport / WS 等辅助端口声明永不作为主窗口目标
+            if line.contains("honeycomb") || line.contains("(WS:") { continue }
             // 行内按可信度排序：完整 URL > host:port > "port" 关键字
             if let p = extract(urlRe, from: line) ?? extract(hostPortRe, from: line) ?? extract(portRe, from: line) {
                 return p
