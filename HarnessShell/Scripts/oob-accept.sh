@@ -232,7 +232,7 @@ if [ -n "$CONFLICT" ]; then
     [ -n "$LEFT" ] && { echo "$LEFT" | xargs kill -9 2>/dev/null; sleep 1; }
     # 它们的 dsh web 子进程（孤儿 node）一并清，避免端口/过程混淆
     # —— 只杀孤儿(PPID==1)；并发同僚的活实例有活父进程，必须放过
-    # (OOB-F8 互杀事故：旧实现 pkill 全模式，会把并发的同僚 run/探针目标一并清场)
+    # (OOB-F10 互杀事故：旧实现 pkill 全模式，会把并发的同僚 run/探针目标一并清场)
     for np in $(pgrep -f '/Contents/Resources/node/bin/node .*/bin\.js web' 2>/dev/null); do
       np_ppid="$(ps -o ppid= -p "$np" 2>/dev/null | tr -d '[:space:]')"
       [ "$np_ppid" = "1" ] && kill -9 "$np" 2>/dev/null
@@ -287,7 +287,7 @@ echo "  $(date +%T) pid=$APP_PID · 日志 $LOG_APP"
 BASE_URL=""
 i=0
 while [ $i -lt 240 ]; do
-  # 端口竞态(OOB-F7):[honeycomb] transport(4800) 与 [harness-shell] dsh web 两行
+  # 端口竞态(OOB-F6):[honeycomb] transport(4800) 与 [harness-shell] dsh web 两行
   # 时序不定,head -1 会抓到 4800 把探针打到 API 上。锚定 'dsh web:' 行解析。
   BASE_URL="$(grep 'dsh web:' "$LOG_APP" 2>/dev/null | grep -oE 'https?://[^[:space:]]*127\.0\.0\.1:[0-9]{2,5}[^[:space:]]*' | head -1 | sed 's:/*$::')"
   [ -n "$BASE_URL" ] && break
@@ -567,7 +567,7 @@ if wanted e || wanted f; then
   PROBE_RC=$?
   PROBE_JSON="$(cat "$OUT_DIR/probe.json" 2>/dev/null)"
 
-  # 活性护栏（OOB-F10）：探针结束即查 app 存亡。app 探针期间死亡（外部清场/崩溃）时，
+  # 活性护栏（OOB-F12）：探针结束即查 app 存亡。app 探针期间死亡（外部清场/崩溃）时，
   # console 里的 ECONNREFUSED 级联只是「被杀下游」而非页面真错 —— e/f 证据作废判 SKIP
   if ! kill -0 "$APP_PID" 2>/dev/null; then
     rm -f "$OUT_DIR/probe.json" "$OUT_DIR/console-errors.txt"
