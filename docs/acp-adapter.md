@@ -67,9 +67,8 @@ Permission 请求默认 fail-closed（`{ outcome: 'cancelled' }`）；harness �
 
 > `gemini-cli-acp` 为 `npx -y @google/gemini-cli` 准备的条目（已启用入册）。本机/CI 未装，
 > 按「未装→detect 返回 null」语义处理：装后即可自动检测命中。ACP 入口官方为 `gemini --acp`
-> （个别版本 subcommand `acp`，安装后请以 `gemini --help` 实测校正 spawnArgs）。kind 暂为
-> placeholder `claude-code` —— AgentKind 联合尚无 `gemini-cli`，需在 `types.ts` 补充后修正
-> （不影响「可发现 / 可接入」，只影响能力匹配的家族标签）。
+> （个别版本 subcommand `acp`，安装后请以 `gemini --help` 实测校正 spawnArgs）。
+> kind 为 `gemini-cli`（`AgentKind` 联合已含该值，见 `connectors/types.ts`，非占位）。
 
 接入的两种姿势：
 - **走 catalog**：在 `connectors/adapters/acp.ts` 的 `ACP_CATALOG` 追加 `AcpCatalogEntry`，再 `bootstrapAcpAdapters()` 一键实例化所有 catalog 项。
