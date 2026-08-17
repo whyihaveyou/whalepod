@@ -14,8 +14,14 @@
 #   f. 全程零 console.error / pageerror（Playwright 探针 console tap）
 #
 # 用法：
-#   oob-accept.sh [--dmg PATH] [--keep] [--only a,c] [--skip e,f]
-#                 [--stop-existing] [--panel-paths x,y] [--ui-timeout-ms N]
+#   oob-accept.sh [--dmg PATH | --app PATH] [--keep] [--only a,c] [--skip e,f]
+#                 [--stop-existing] [--fresh-data-root] [--panel-paths x,y]
+#                 [--ui-timeout-ms N]
+#
+#   --app PATH          不打 DMG、直接对某 .app 跑（候选验收期 Flash-4 出盒即用）
+#   --fresh-data-root   把真实 ~/Library/Application Support/WhalePod 先挪进沙盒备份，验收后
+#                       删除验收期产生的数据并完整还原（内置 dsh_home 种子仅对空数据根
+#                       生效——不属于 --stop-existing 的温柔路线，属侵入性旗语，见 OOB-F1）
 #
 # 沙盒边界声明（验收官发现 OOB-F1）：
 #   app 的 DataRoot 硬编到真实 ~/Library/Application Support/WhalePod（flock
@@ -49,20 +55,24 @@ DSH_REPO="${OOB_DSH_REPO:-$REPO_ROOT/deepseek-harness}"
 
 # ---------------------------------------------------------------- 参数解析
 DMG=""
+APP_PATH=""
 KEEP=0
 ONLY=""
 SKIP=""
 STOP_EXISTING=0
+FRESH_DATA_ROOT=0
 PANEL_PATHS_ARG=""
 UI_TIMEOUT_MS=15000
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dmg) DMG="$2"; shift 2 ;;
+    --app) APP_PATH="$2"; shift 2 ;;
     --keep) KEEP=1; shift ;;
     --only) ONLY="$2"; shift 2 ;;
     --skip) SKIP="$2"; shift 2 ;;
     --stop-existing) STOP_EXISTING=1; shift ;;
+    --fresh-data-root) FRESH_DATA_ROOT=1; shift ;;
     --panel-paths) PANEL_PATHS_ARG="$2"; shift 2 ;;
     --ui-timeout-ms) UI_TIMEOUT_MS="$2"; shift 2 ;;
     -h|--help) sed -n '1,36p' "$0"; exit 0 ;;
@@ -70,11 +80,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$DMG" ]; then
+if [ -z "$DMG" ] && [ -z "$APP_PATH" ]; then
   DMG="$(ls -t "$REPO_ROOT"/HarnessShell/dist/WhalePod-*-macos-arm64.dmg 2>/dev/null | head -1)"
 fi
-if [ -z "$DMG" ] || [ ! -f "$DMG" ]; then
-  echo "❌ 找不到 DMG（--dmg 未给且 dist/ 无 WhalePod-*-macos-arm64.dmg）" >&2
+if [ -z "$APP_PATH" ]; then
+  if [ -z "$DMG" ] || [ ! -f "$DMG" ]; then
+    echo "❌ 找不到 DMG（--dmg 未给且 dist/ 无 WhalePod-*-macos-arm64.dmg）" >&2
+    exit 65
+  fi
+elif [ ! -d "$APP_PATH" ] || [ ! -f "$APP_PATH/Contents/Info.plist" ]; then
+  echo "❌ --app 指向非 .app 目录：$APP_PATH" >&2
   exit 65
 fi
 
@@ -87,12 +102,19 @@ OUT_DIR="$SB/out"
 mkdir -p "$MNT" "$APP_DST_DIR" "$SB/logs" "$OUT_DIR" "$SB/home"
 
 APP_PID=""
+DATA_ROOT_REAL="$HOME/Library/Application Support/WhalePod"
+DR_MOVED=0
+
 cleanup() {
   if [ -n "$APP_PID" ]; then kill "$APP_PID" 2>/dev/null; fi
   # 兜底：被验 app 及其 bundled node 子进程（路径均在沙盒内）
   pkill -f "$SB/" 2>/dev/null
+  # --fresh-data-root 还账：删验收期数据、完整还原原数据根
+  if [ "$DR_MOVED" -eq 1 ]; then
+    rm -rf "$DATA_ROOT_REAL" 2>/dev/null
+    mv "$SB/data-root-backup" "$DATA_ROOT_REAL" 2>/dev/null
+  fi
   hdiutil detach "$MNT" -quiet 2>/dev/null
-  if [ "$KEEP" -eq 0 ]; then :; fi  # 沙盒默认保留（证据），--keep 仅显式强调
 }
 trap cleanup EXIT INT TERM
 
@@ -104,28 +126,39 @@ wanted() {  # wanted a → 0=要做 1=跳过
 }
 
 # ---------------------------------------------------------------- 头部展示
-DMG_SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+if [ -n "$DMG" ] && [ -f "$DMG" ]; then
+  DMG_SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+  SRC_LABEL="DMG: $DMG（sha256 $DMG_SHA）"
+else
+  DMG_SHA="（--app 直取模式，无 DMG）"
+  SRC_LABEL="APP: $APP_PATH（--app 直取模式，无 DMG sha256）"
+fi
 HOST_SW="$(sw_vers 2>/dev/null | tr '\t' ' ' | tr '\n' ' ' | tr -s ' ')"
 echo "==================================================================="
 echo " OOB-4 开箱版全链验收  ·  $(date '+%Y-%m-%d %H:%M:%S %z')"
-echo " DMG    : $DMG"
-echo " SHA256 : $DMG_SHA"
+echo " $SRC_LABEL"
 echo " 沙盒   : $SB"
 echo "==================================================================="
 
 # ---------------------------------------------------------------- §1 沙盒安装
-echo "▶ §1 DMG 挂载 + 拷贝安装到沙盒"
-if ! hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null 2>&1; then
-  echo "❌ DMG 挂载失败"; exit 66
+if [ -n "$APP_PATH" ]; then
+  echo "▶ §1 --app 直取：拷贝安装到沙盒"
+  APP_NAME="$(basename "$APP_PATH")"
+  ditto "$APP_PATH" "$APP_DST_DIR/$APP_NAME"
+else
+  echo "▶ §1 DMG 挂载 + 拷贝安装到沙盒"
+  if ! hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null 2>&1; then
+    echo "❌ DMG 挂载失败"; exit 66
+  fi
+  APP_SRC="$(find "$MNT" -maxdepth 1 -name '*.app' -print -quit)"
+  if [ -z "$APP_SRC" ]; then
+    echo "❌ 挂载卷内无 *.app"; exit 66
+  fi
+  APP_NAME="$(basename "$APP_SRC")"
+  echo "  发现 app：$APP_NAME"
+  ditto "$APP_SRC" "$APP_DST_DIR/$APP_NAME"
+  hdiutil detach "$MNT" -quiet 2>/dev/null
 fi
-APP_SRC="$(find "$MNT" -maxdepth 1 -name '*.app' -print -quit)"
-if [ -z "$APP_SRC" ]; then
-  echo "❌ 挂载卷内无 *.app"; exit 66
-fi
-APP_NAME="$(basename "$APP_SRC")"
-echo "  发现 app：$APP_NAME（alpha.5 预期 HarnessShell.app——branding 未落位已知）"
-ditto "$APP_SRC" "$APP_DST_DIR/$APP_NAME"
-hdiutil detach "$MNT" -quiet 2>/dev/null
 APP="$APP_DST_DIR/$APP_NAME"
 EXE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
 APP_VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || echo '?')"
@@ -158,6 +191,18 @@ if [ -n "$CONFLICT" ]; then
     done
     echo "  关闭后重试，或加 --stop-existing 由脚本清场（exit 129=前置冲突）"
     exit 129
+  fi
+fi
+
+# --fresh-data-root：内置 dsh_home 种子仅对空数据根生效（OOBE 语义）——腰斩真实 WhalePod
+# 数据根入沙盒备份（cleanup trap 完整还原），让被验实例走真·首启
+if [ "$FRESH_DATA_ROOT" -eq 1 ]; then
+  if [ -d "$DATA_ROOT_REAL" ]; then
+    echo "  --fresh-data-root：挪 $DATA_ROOT_REAL → $SB/data-root-backup（cleanup 还原）"
+    mv "$DATA_ROOT_REAL" "$SB/data-root-backup"
+    DR_MOVED=1
+  else
+    echo "  --fresh-data-root：数据根本就不存在（=本就首启语义）"
   fi
 fi
 
@@ -272,30 +317,24 @@ echo "  $(mark $STATUS_a)  $NOTE_a"
 
 # ---------------------------------------------------------------- 断言 b
 echo ""
-echo "▶ 断言 b：cordis / schemastery 存在且全树单实例"
+echo "▶ 断言 b：@deepseek-ai/cordis / schemastery 全树单实例"
+# 命名空间修正（alpha.6 取证+盒内 honeycomb package.json peerDependencies 实证）：
+# dsh 全家桶与 honeycomb 共用 VENDORED @deepseek-ai/cordis + @deepseek-ai/schemastery，
+# 不存在 bare cordis/schemastery 顶层包——单实例不变量按 vendored 名对账。
 if wanted b; then
-  if [ ! -d "$HC_DIR" ]; then
-    # honeycomb 未装箱：单实例不变量的主体（honeycomb subtree）不存在 → 空真 SKIP。
-    # alpha.5 runtime 用 vendored @deepseek-ai/cordis(+schemastery)，无 bare 包——正常。
-    VENDOR_NOTE=""
-    [ -d "$RES/node_modules/@deepseek-ai/cordis" ] && VENDOR_NOTE="vendored @deepseek-ai/cordis 在位"
-    [ -d "$RES/node_modules/@deepseek-ai/schemastery" ] && VENDOR_NOTE="$VENDOR_NOTE / @deepseek-ai/schemastery 在位"
-    set_result b SKIP "honeycomb 未装箱 → 单实例检查主体缺席（$VENDOR_NOTE）；随 alpha.6 装箱生效"
-  else
-    B_FAIL=""
-    for pkg in cordis schemastery; do
-      if [ ! -d "$RES/node_modules/$pkg" ]; then
-        B_FAIL="$B_FAIL 顶层缺失:$pkg;"
-      fi
-      if [ -f "$HC_DIR/node_modules/$pkg/package.json" ]; then
-        B_FAIL="$B_FAIL 嵌套重复:$pkg(@whalepod/honeycomb/node_modules);"
-      fi
-    done
-    if [ -n "$B_FAIL" ]; then
-      set_result b FAIL "$B_FAIL"
-    else
-      set_result b PASS "顶层 cordis+schemastery 在位且 honeycomb 子树无嵌套副本（单实例成立）"
+  B_FAIL=""
+  for pkg in "@deepseek-ai/cordis" "@deepseek-ai/schemastery"; do
+    cnt="$(find "$RES/node_modules" -maxdepth 7 -name package.json -path "*/$pkg/*" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$cnt" -eq 0 ]; then
+      B_FAIL="$B_FAIL 缺失:$pkg;"
+    elif [ "$cnt" -gt 1 ]; then
+      B_FAIL="$B_FAIL 多实例x$cnt:$pkg;"
     fi
+  done
+  if [ -n "$B_FAIL" ]; then
+    set_result b FAIL "$B_FAIL"
+  else
+    set_result b PASS "@deepseek-ai/cordis、@deepseek-ai/schemastery 全树恰一份（honeycomb peerDeps 指向同 vendored 包）"
   fi
 fi
 echo "  $(mark $STATUS_b)  $NOTE_b"
@@ -319,7 +358,14 @@ if wanted c; then
       FIRST_HIT="$(grep -i 'honeycomb' "$DUMP_OUT" | head -1 | sed 's/^ *//')"
       set_result c PASS "dump 内 honeycomb 命中 $HC_HITS 处；首条：$FIRST_HIT"
     else
-      set_result c FAIL "dump 内 0 处 honeycomb（patch 未合成 honeycomb 条目；alpha.5 预期红）"
+      # 对比证据：盒内种子 patch 本身是否存在（判「种子缺席」vs「种植通路缺席」）
+      BOX_SEED="$RES/dsh_home/profiles/web/cordis.patch.yml"
+      if [ -f "$BOX_SEED" ]; then
+        SEED_STATE="盒内种子 patch 在（grep honeycomb=$(grep -ci honeycomb "$BOX_SEED" 2>/dev/null) 条）→ 未达 DSH_HOME——疑似 OOB-F3（种植代码路径缺席）"
+      else
+        SEED_STATE="盒内种子 patch 缺失（$BOX_SEED）→ 种子未进盒，OOB-1 侧问题"
+      fi
+      set_result c FAIL "dump 内 0 处 honeycomb（$SEED_STATE）"
     fi
   fi
 fi
@@ -340,7 +386,7 @@ if wanted d; then
     > "$OUT_DIR/hives-1.code" 2>/dev/null
   CODE_D="$(cat "$OUT_DIR/hives-1.code" 2>/dev/null || echo 000)"
   if [ "$CODE_D" != "200" ]; then
-    set_result d FAIL "GET /v1/hives → $CODE_D（:4800 未起服或非 transport；alpha.5 预期红）"
+    set_result d FAIL "GET /v1/hives → $CODE_D（:4800 未起服或非 transport——补丁层须含 transport.enabled+port=4800，未见请先查断言 c）"
   else
     POST_OUT="$(curl -fsS -o "$OUT_DIR/hive-post.json" -w '%{http_code}' --max-time 8 \
       -X POST -H 'content-type: application/json' \
@@ -445,8 +491,7 @@ REPORT="$OUT_DIR/REPORT.md"
   echo "| 项 | 值 |"
   echo "| --- | --- |"
   echo "| 时间 | $(date '+%Y-%m-%d %H:%M:%S %z') |"
-  echo "| DMG | \`$DMG\` |"
-  echo "| sha256 | \`$DMG_SHA\` |"
+  echo "| 来源 | \`$SRC_LABEL\` |"
   echo "| app | $APP_NAME $APP_VER |"
   echo "| 沙盒 | \`$SB\` |"
   echo "| 主机 | $HOST_SW |"
@@ -474,7 +519,10 @@ REPORT="$OUT_DIR/REPORT.md"
   echo ""
   echo "## 验收官注记"
   echo "- **OOB-F1**：app DataRoot 硬编真实 home（flock singleton.lock 全局互斥），sandbox HOME 对 app 层不生效——本次运行期数据写真实 \`~/Library/Application Support/WhalePod/\`。真·全沙盒验收待 app 提供数据根环境变量 override（如 \`WHALEPOD_DATA_ROOT\`），已向 OOB-1 提请。"
-  echo "- **OOB-F2**：dsh web 对任意未知路径回退 SPA \`index.html\`（本次 /health=200 但 body=<!doctype html>+__DSH_BOOT__ 注入帧，实证非真路由；源内 apps/web+packages/web grep health 零命中）——健康探针判定以上表「起服」行实测路径为准；若对外契约要宣称 /health，需 dsh web 侧补真路由（返回 JSON 健康帧）。"
+  echo "- **OOB-F2**：dsh web 对任意未知路径回退 SPA \`index.html\`（首次测 /health=200 但 body=<!doctype html>+__DSH_BOOT__ 注入帧，实证非真路由；源内 apps/web+packages/web grep health 零命中）——健康探针判定以上表「起服」行实测路径为准；若对外契约要宣称 /health，需 dsh web 侧补真路由（返回 JSON 健康帧）。"
+  if [ "$STATUS_c" = "FAIL" ] && [ -f "$RES/dsh_home/profiles/web/cordis.patch.yml" ]; then
+    echo "- **OOB-F3**：盒内 dsh_home 种子 patch 在盒（含 honeycomb/transport insert），但运行期 DSH_HOME 的 profiles 层从未被填充——Swift 全源 grep dsh_home 零命中（Migration.swift 仅迁 legacy config.json，无种子种植代码路径）；profile patch 不合成 → transport 不启 → 断言 d 随之失。修复建议（归位 OOB-1）：Swift 首启把 Resources/dsh_home 内容拷入 harness 家目录（幂等 marker 防重复覆盖），或经 config.environment 注入等效指向。"
+  fi
 } > "$REPORT"
 
 echo ""
