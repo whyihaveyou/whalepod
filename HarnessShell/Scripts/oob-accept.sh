@@ -112,12 +112,20 @@ DATA_ROOT_REAL="$HOME/Library/Application Support/WhalePod"
 LEGACY_CFG="$HOME/.harness-shell/config.json"
 DR_MOVED=0
 LC_MOVED=0
+# OOB-F11：honeycomb fact store 固定 ~/.dfh/hive（盒装 app 的 node 子进程不承 env 沙盒 HOME），
+# 跨 run 共享污染 → 面板 resolveHiveId data[0] 绑旧 hive、断言 e 哨兵永不可见；随 --fresh-data-root 一并挪还
+DFH_REAL="$HOME/.dfh"
+DFH_MOVED=0
 
 cleanup() {
   if [ -n "$APP_PID" ]; then kill "$APP_PID" 2>/dev/null; fi
   # 兜底：被验 app 及其 bundled node 子进程（路径均在沙盒内）
   pkill -f "$SB/" 2>/dev/null
   # --fresh-data-root 还账：删验收期数据、完整还原原数据根
+  if [ "$DFH_MOVED" -eq 1 ]; then
+    rm -rf "$DFH_REAL" 2>/dev/null
+    mv "$SB/dfh-backup" "$DFH_REAL" 2>/dev/null
+  fi
   if [ "$DR_MOVED" -eq 1 ]; then
     rm -rf "$DATA_ROOT_REAL" 2>/dev/null
     mv "$SB/data-root-backup" "$DATA_ROOT_REAL" 2>/dev/null
@@ -223,7 +231,12 @@ if [ -n "$CONFLICT" ]; then
     LEFT="$(pgrep -f '/Contents/MacOS/(HarnessShell|WhalePod)$' 2>/dev/null | grep -v "$$" || true)"
     [ -n "$LEFT" ] && { echo "$LEFT" | xargs kill -9 2>/dev/null; sleep 1; }
     # 它们的 dsh web 子进程（孤儿 node）一并清，避免端口/过程混淆
-    pkill -f '/Contents/Resources/node/bin/node .*/bin\.js web' 2>/dev/null
+    # —— 只杀孤儿(PPID==1)；并发同僚的活实例有活父进程，必须放过
+    # (OOB-F8 互杀事故：旧实现 pkill 全模式，会把并发的同僚 run/探针目标一并清场)
+    for np in $(pgrep -f '/Contents/Resources/node/bin/node .*/bin\.js web' 2>/dev/null); do
+      np_ppid="$(ps -o ppid= -p "$np" 2>/dev/null | tr -d '[:space:]')"
+      [ "$np_ppid" = "1" ] && kill -9 "$np" 2>/dev/null
+    done
     sleep 1
   else
     echo "❌ 单实例冲突：下列 HarnessShell/WhalePod 实例持锁在跑："
@@ -256,6 +269,12 @@ if [ "$FRESH_LEGACY_CONFIG" -eq 1 ]; then
   else
     echo "  --fresh-legacy-config：剧情中不存在（=本就无雷）"
   fi
+fi
+# OOB-F11：~/.dfh/hive 同舞（盒进程不写数据根，写死 real HOME）
+if [ "$FRESH_DATA_ROOT" -eq 1 ] && [ -d "$DFH_REAL" ]; then
+  echo "  --fresh-data-root：--OOB-F11-- 挪 $DFH_REAL → $SB/dfh-backup（cleanup 还原）"
+  mv "$DFH_REAL" "$SB/dfh-backup"
+  DFH_MOVED=1
 fi
 
 env -i \
@@ -548,7 +567,14 @@ if wanted e || wanted f; then
   PROBE_RC=$?
   PROBE_JSON="$(cat "$OUT_DIR/probe.json" 2>/dev/null)"
 
-  if [ $PROBE_RC -eq 2 ]; then
+  # 活性护栏（OOB-F10）：探针结束即查 app 存亡。app 探针期间死亡（外部清场/崩溃）时，
+  # console 里的 ECONNREFUSED 级联只是「被杀下游」而非页面真错 —— e/f 证据作废判 SKIP
+  if ! kill -0 "$APP_PID" 2>/dev/null; then
+    rm -f "$OUT_DIR/probe.json" "$OUT_DIR/console-errors.txt"
+    echo "    ⚠️  app(pid=$APP_PID)探针期间死亡 —— e/f 判 SKIP，本轮 e/f 证据作废（外部并发清场或 app 崩溃，查 liveness/沙盒日志）" >&2
+    wanted e && set_result e SKIP "app 探针期间死亡，e 证据作废（EXIT_MASK 不置位；重跑取证）"
+    wanted f && set_result f SKIP "app 探针期间死亡，f 证据作废（EXIT_MASK 不置位；重跑取证）"
+  elif [ $PROBE_RC -eq 2 ]; then
     wanted e && set_result e SKIP "playwright 不可用（$(echo "$PROBE_JSON" | "$NODE" -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(o.reason||"")' 2>/dev/null)→ 在 e2e/ 装 @playwright/test 或检查 .pnpm）"
     wanted f && set_result f SKIP "playwright 不可用，console tap 未执行"
   elif [ $PROBE_RC -ne 0 ]; then
