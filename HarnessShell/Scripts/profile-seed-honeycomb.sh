@@ -111,6 +111,10 @@ const BLOCK = [
   '          enabled: true',
   '          host: 127.0.0.1',
   '          port: 4800',
+  '        # OOB 开箱自举：fresh 安装首启无任何 hive 时自动创建默认团队',
+  '        #（团队面板按 hive-dev 解析，自此开箱可见，不再报「未找到 hive」）',
+  '        bootstrap:',
+  '          hiveName: hive-dev',
   '',
 ].join('\n');
 

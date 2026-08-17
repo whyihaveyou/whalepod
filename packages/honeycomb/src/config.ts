@@ -39,6 +39,19 @@ export interface HoneycombConfig {
   persistenceDir?: string
   /** 真实网络 transport（HTTP+WS）开关与监听参数；缺省不启动。 */
   transport?: TransportServerOptions
+  /**
+   * 开箱自举（WhalePod OOB）：插件装配完成后若当前没有任何 hive，
+   * 自动创建一个默认团队（hive.create 自带首任 queen 孵化）。
+   * 解决 fresh 安装打开团队面板报「未找到 hive: hive-dev」的缺口——
+   * 面板默认按 name='hive-dev' 解析、兜底 hives[0]，自举保证两者必中。
+   * 缺省不开启（库消费方默认不应有业务数据副作用）。
+   */
+  bootstrap?: {
+    /** 要创建的默认 hive 名；默认 'hive-dev'（与团队面板默认解析名对齐）。 */
+    hiveName?: string
+    /** 默认 hive 的 workspace 路径；缺省用进程 cwd。 */
+    workspace?: string
+  }
 }
 
 /** 默认 transport HTTP 端口（config + server 共享）。 */
@@ -59,6 +72,10 @@ export interface ResolvedHoneycombConfig {
     host: string
     port: number
   }
+  bootstrap: {
+    hiveName: string
+    workspace?: string
+  } | undefined
 }
 
 export const DEFAULT_HONEYCOMB_CONFIG: ResolvedHoneycombConfig = {
@@ -69,6 +86,7 @@ export const DEFAULT_HONEYCOMB_CONFIG: ResolvedHoneycombConfig = {
   persistence: 'jsonl',
   persistenceDir: '',
   transport: { enabled: false, host: DEFAULT_TRANSPORT_HOST, port: DEFAULT_TRANSPORT_PORT },
+  bootstrap: undefined,
 }
 
 /** Default persistence directory, resolved lazily so it is stable per process. */
@@ -106,6 +124,13 @@ export function resolveHoneycombConfig(input?: HoneycombConfig): ResolvedHoneyco
       host: value.transport?.host ?? DEFAULT_HONEYCOMB_CONFIG.transport.host,
       port: value.transport?.port ?? DEFAULT_HONEYCOMB_CONFIG.transport.port,
     },
+    bootstrap:
+      value.bootstrap === undefined
+        ? undefined
+        : {
+            hiveName: value.bootstrap.hiveName ?? 'hive-dev',
+            ...(value.bootstrap.workspace !== undefined ? { workspace: value.bootstrap.workspace } : {}),
+          },
   }
 }
 

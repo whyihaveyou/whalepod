@@ -54,6 +54,26 @@ export async function apply(ctx: Context, config?: HoneycombConfig): Promise<voi
   if (resolved.transport.enabled) {
     await startTransportServer(ctx, resolved)
   }
+
+  // ── 开箱自举（OOB）：无任何 hive 时创建默认团队 ──────────────────────
+  // WhalePod 开箱版场景：fresh 安装首启后用户直接打开团队面板，若此时
+  // hives 为空，面板按 'hive-dev' 解析失败报开发者向错误。此处幂等自举
+  //（list 非空则跳过），hive.create 自带首任 queen 孵化。失败不阻塞装配
+  //（记告警，用户仍可通过 REST/面板手动创建）。
+  if (resolved.bootstrap) {
+    try {
+      const existing = await hive.list()
+      if (existing.length === 0) {
+        const created = await hive.create({
+          name: resolved.bootstrap.hiveName,
+          workspace: resolved.bootstrap.workspace ?? process.cwd(),
+        })
+        console.log(`[honeycomb] bootstrap：已创建默认团队 ${created.name} (${created.id})`)
+      }
+    } catch (err) {
+      console.warn('[honeycomb] bootstrap 默认团队创建失败（不阻塞启动）：', err)
+    }
+  }
 }
 
 /**
