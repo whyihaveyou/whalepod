@@ -62,58 +62,90 @@ ls /tmp/wp6.app/Contents/Resources/node/ 2>/dev/null | head -5
 #### 步骤 2：honeycomb 包可在 Node 进程中 import
 
 ```bash
-DSH_HOME=/tmp/wp6.app/Contents/Resources/dsh_home
-node --version  # 不重要，只确认有 node
-node -e "
-  const path = require('path');
-  process.env.DSH_HOME = '$DSH_HOME';
-  // 引导 dsh_home profiles 生效（与 harness client SDK 启动时一致）
-  // 注：dsh_home/profiles/node_modules/@whalepod/honeycomb 是相对 symlink
-  //     → ../../../../node_modules/@whalepod/honeycomb（OOB-1 symlink 归一化 510 条链之一）
-  const honeycomb = require('/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb');
-  console.log('honeycomb module loaded:', typeof honeycomb);
-  console.log('exports:', Object.keys(honeycomb).slice(0, 10));
-"
-# 期望：不抛 MODULE_NOT_FOUND，typeof honeycomb === 'object'（或 'function'），导出键非空
+# 关键修正：boxed honeycomb package.json type=module，根导出是 ESM only
+# CJS require() 会 ERR_PACKAGE_PATH_NOT_EXPORTED 或 ERR_REQUIRE_ESM，必须用 ESM import
+# 入口形态：根模块导出 63 keys，含 createHoneycombClient / createOrchestrationLoop /
+#          apply() 等；./client 子路径不存在
+
+cat >/tmp/oob6-honeycomb-import.mjs <<'EOF'
+import * as hc from '/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb/lib/index.js';
+console.log('typeof hc:', typeof hc);
+console.log('exports count:', Object.keys(hc).length);
+console.log('has apply:', typeof hc.apply === 'function');
+console.log('has createHoneycombClient:', typeof hc.createHoneycombClient === 'function');
+console.log('has createOrchestrationLoop:', typeof hc.createOrchestrationLoop === 'function');
+EOF
+node /tmp/oob6-honeycomb-import.mjs
+# 期望：全部 true（hc 是 ESM object，含 apply + 两个具名导出）
 ```
 
-> 关键约束：`require` 必须走**装箱物理路径** `/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb`，
+> 关键约束：`import` 必须走**装箱物理路径** `/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb/lib/index.js`，
 > 不允许走开发环境 `node_modules`（如 `/Users/qzp/aion2dsh/HarnessShell/.build/checkouts/honeycomb/`）。
+> CJS `require()` **不可用**（type=module），不要尝试。
 
-#### 步骤 3：plugin 已注册到 cordis runtime
+#### 步骤 3：honeycomb apply 到 cordis runtime（裸 cordis 层）
 
 ```bash
-node -e "
-  const path = require('path');
-  process.env.DSH_HOME = '$DSH_HOME';
-  // 启动 harness client SDK（cordis loader），随后查 Honeycomb.project 表面
-  // 注：honeycomb 包目前直接暴露根 export，未必有 ./client 子路径
-  //     如失败降级为 require('@whalepod/honeycomb').start 或 runtime 相关入口
-  const honeycomb = require('/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb');
-  console.log('honeycomb keys:', Object.keys(honeycomb).slice(0, 20));
-  // 如果 honeycomb 暴露 start/cordis loader surface，直接调；否则查 profile seed 引导
-  const profileSeed = require('/tmp/wp6.app/Contents/Resources/dsh_home/profiles/web/cordis.yml');
-  console.log('profile seed loaded:', !!profileSeed);
-"
-# 期望：activePlugins 至少含 'honeycomb'（自身）+ 已注册的子插件（panel: ui-whalepod-team）
-#      Honeycomb.project 含 ≥ 1 个已注册 surface（OOB-1 profile-seed-honeycomb.sh --register-panel
-#      幂等 append 面板登记行 insert 块 id: ui-whalepod-team）
+# 关键修正：boxed @deepseek-ai/cordis ^4.0.1 只导出 Context/Service/Fiber/Inject 等 primitives
+# 不导出 Loader / Plugin API；honeycomb apply() 直接调，root 模块本身就是 cordis plugin
+
+cat >/tmp/oob6-honeycomb-apply.mjs <<'EOF'
+import { Context } from '/tmp/wp6.app/Contents/Resources/node_modules/@deepseek-ai/cordis/lib/index.js';
+import * as hc from '/tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb/lib/index.js';
+
+const ctx = new Context();
+await hc.apply(ctx, {
+  transport: { host: '127.0.0.1', port: 0 },
+});
+// apply 后预期：5 个 Service 装配到 ctx
+const expect = ['hive', 'roster', 'courier', 'ledger', 'mandate'];
+for (const name of expect) {
+  const svc = ctx.get(name);
+  console.log(`service ${name}: ${svc ? '✓ present' : '✗ MISSING'}`);
+}
+await ctx.dispose();
+EOF
+node /tmp/oob6-honeycomb-apply.mjs
+# 期望：5 行全部 ✓ present（hive/roster/courier/ledger/mandate）
 ```
 
-> 关键点: cordis 框架 `loader.activePlugins` 是 plugin 注册后的可信信号；`Honeycomb.project` 是 plugin 暴露的「表面」键空间（surface registration）。两者都非空即过。
+> **不要尝试** `ctx.loader.activePlugins` 或 `ctx.plugin()` —— 盒上 boxed cordis 是纯 primitives，
+> 这些 API 来自 dsh 运行时的 cordis-plugin-loader 层，**不在 cordis 包面上**。
+
+#### 步骤 3b：loader 注册层（产物侧断言）
+
+```bash
+# loader 层的注册证据不能在裸 cordis 上跑，要靠 boxed dsh --dump-config 合成输出
+# boxed dsh 应在 /tmp/wp6.app/Contents/Resources/node_modules/@deepseek-ai/dsh/bin/dsh.js
+
+DSH_BIN=/tmp/wp6.app/Contents/Resources/node_modules/@deepseek-ai/dsh/bin/dsh.js
+$DSH_BIN --profile web --dump-config 2>/tmp/oob6-dsh-stderr.log >/tmp/oob6-dsh-config.json
+# 期望：JSON 含 honeycomb 条目（panel 也在 insert 块 id: ui-whalepod-team）
+jq '.plugins[] | select(.name == "honeycomb")' /tmp/oob6-dsh-config.json
+jq '.plugins[] | select(.name == "ui-whalepod-team")' /tmp/oob6-dsh-config.json
+# 期望：两条 jq 输出均非空（honeycomb + 面板均被 loader 解析并注册）
+```
+
+> 这一层验证「loader 实际能解析到 honeycomb + 面板」，是步骤 3 裸 cordis 验证的补充。
+> 如果两步都过，说明 plugin 既能被 cordis 直接 apply，又能被 dsh 的 loader 正确发现+注册。
 
 #### 步骤 4：跨步骤一致性 — 装机实例 vs 开发实例版本对齐
 
 ```bash
 # 开发环境读 manifest（pnpm workspace checkouts）
 cat /Users/qzp/aion2dsh/HarnessShell/.build/checkouts/honeycomb/package.json | grep '"version"'
-# 装箱产物读同字段（直接路径，因为 dsh_home/profiles/node_modules/@whalepod/honeycomb 是 symlink）
+# 装箱产物读同字段
 grep '"version"' /tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb/package.json
 # 期望：两者完全一致（commit pin → box tarball 是只读快照）
 
 # 面板比对
 cat /Users/qzp/aion2dsh/HarnessShell/.build/checkouts/dsh-client-ui-whalepod-team/package.json 2>/dev/null | grep '"version"'
 grep '"version"' /tmp/wp6.app/Contents/Resources/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team/package.json
+
+# 依赖核对（honeycomb package.json 期望 deps: agentclientprotocol/sdk + ws; peers: cordis + schemastery）
+jq '.dependencies, .peerDependencies' /tmp/wp6.app/Contents/Resources/node_modules/@whalepod/honeycomb/package.json
+# 期望：deps 含 @agentclientprotocol/sdk ^1.3.0 + ws ^8.21.3
+#       peers 含 @deepseek-ai/cordis ^4.0.1 + @deepseek-ai/schemastery ^3.18.1
 ```
 
 ### 2.3 必过判据（fail loud）
@@ -122,7 +154,7 @@ grep '"version"' /tmp/wp6.app/Contents/Resources/node_modules/@deepseek-ai/dsh-c
 |---|---|---|
 | 10.1 物理存在（步骤 1）| 用户运行实例无 honeycomb/panel → agent runtime 退化 | 重新跑 build-runtime.sh 同事务装箱（OOB-1 PANEL_TARBALL 显式传）|
 | 10.2 可 import（步骤 2）| 启动时 MODULE_NOT_FOUND 崩溃 | 查 ESM 修复（c59125a）+ post-build fix-esm 是否生效；symlink 相对化（510 条链，codesign 前 3e 步）|
-| 10.3 plugin 注册（步骤 3）| 表面登记为空 → agent 调不出接口 | 查 cordis loader 配置 + profile seed (f424501) + OOB-1 `--register-panel` 幂等 append 面板登记行（insert 块 id: ui-whalepod-team）|
+| 10.3 plugin 注册（步骤 3 + 3b）| cordis apply 后 5 Service 未装配 / loader dump-config 无 honeycomb 条目 → agent 调不出接口 | ① 裸 cordis 层：hc.apply(ctx, config) 后 hive/roster/courier/ledger/mandate 全装配；② loader 层：boxed dsh --profile web --dump-config 合成含 honeycomb 条目（产物侧 3d 断言）；③ profile seed (f424501) + OOB-1 `--register-panel` 幂等 append 面板登记行（insert 块 id: ui-whalepod-team）|
 | 10.4 版本对齐（步骤 4）| 开发/装箱 drift → 用户与开发行为不一致 | 重打 tarball，确保 build-runtime 在 git checkout 后跑 |
 
 ### 2.4 与守门链的顺序
