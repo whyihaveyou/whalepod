@@ -201,6 +201,20 @@ try {
     await page.waitForTimeout(2000)
   }
 
+  // OOB-F9：OOBE 清场后主界面（cordis 全插件启动 + sidebar 渲染）需要数秒，
+  // fresh 首启（seed 种植+全量初始化）更慢——144005 轮实证「稍后配置」后 4.4s
+  // 找不到触发器即 not-opened。显式等「团队面板」触发器出现（至多 30s，超时继续兜底）。
+  try {
+    await page.waitForFunction(() => {
+      if (document.querySelector('[data-whalepod-team]')) return true
+      return [...document.querySelectorAll('button,[role="button"],[class*="trigger"],[class*="item"]')]
+        .some(el => ((el.textContent || '') + (el.getAttribute('aria-label') || '')).includes('团队面板'))
+    }, { timeout: 30000, polling: 500 })
+    result.mainUiReady = true
+  } catch {
+    result.mainUiReady = false
+  }
+
   // ---- 3.6 打开团队面板（生产实证：入口是侧栏「◈团队面板」按钮；打开后 roster 经 :4800 拉真数据）----
   result.panelOpened = false
   const clickTrigger = async () => page.evaluate(() => {

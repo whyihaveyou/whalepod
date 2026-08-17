@@ -263,7 +263,7 @@ env -i \
   PATH=/usr/bin:/bin:/usr/sbin:/sbin \
   "$EXE" >"$LOG_APP" 2>&1 &
 APP_PID=$!
-echo "  pid=$APP_PID · 日志 $LOG_APP"
+echo "  $(date +%T) pid=$APP_PID · 日志 $LOG_APP"
 
 BASE_URL=""
 i=0
@@ -293,7 +293,7 @@ if [ -z "$BASE_URL" ]; then
   exit 127  # 前置失败：全链断，非单断言位
 fi
 PORT="${BASE_URL##*:}"
-echo "  起服 $BASE_URL（随机端口 $PORT）"
+echo "  $(date +%T) 起服 $BASE_URL（随机端口 $PORT）"
 
 # /health 优先，回退 /；并截取 body 头部判定真路由还是 SPA index.html 回退
 curl -fsS --max-time 5 -o "$OUT_DIR/health-body.txt" "$BASE_URL/health" 2>/dev/null
@@ -349,7 +349,7 @@ HC_DIR="$RES/node_modules/@whalepod/honeycomb"
 
 # ---------------------------------------------------------------- 断言 a
 echo ""
-echo "▶ 断言 a：内置 runtime 含 @whalepod/honeycomb 且 ESM import 暴露 63 exports"
+echo "▶ $(date +%T) 断言 a：内置 runtime 含 @whalepod/honeycomb 且 ESM import 暴露 63 exports"
 if wanted a; then
   if [ ! -d "$HC_DIR" ]; then
     set_result a FAIL "目录缺失：$HC_DIR（alpha.5 预期红——honeycomb 未装箱）"
@@ -371,7 +371,7 @@ echo "  $(mark $STATUS_a)  $NOTE_a"
 
 # ---------------------------------------------------------------- 断言 b
 echo ""
-echo "▶ 断言 b：@deepseek-ai/cordis / schemastery 全树单实例"
+echo "▶ $(date +%T) 断言 b：@deepseek-ai/cordis / schemastery 全树单实例"
 # 命名空间修正（alpha.6 取证+盒内 honeycomb package.json peerDependencies 实证）：
 # dsh 全家桶与 honeycomb 共用 VENDORED @deepseek-ai/cordis + @deepseek-ai/schemastery，
 # 不存在 bare cordis/schemastery 顶层包——单实例不变量按 vendored 名对账。
@@ -395,7 +395,7 @@ echo "  $(mark $STATUS_b)  $NOTE_b"
 
 # ---------------------------------------------------------------- 断言 c
 echo ""
-echo "▶ 断言 c：profile patch 合成含 honeycomb 条目（dsh web --dump-config）"
+echo "▶ $(date +%T) 断言 c：profile patch 合成含 honeycomb 条目（dsh web --dump-config）"
 if wanted c; then
   # 数据根与 app 同址（真实 home；app 层不受沙盒 HOME 影响——OOB-F1）
   DSH_HOME_X="$HOME/Library/Application Support/WhalePod/harness"
@@ -427,7 +427,7 @@ echo "  $(mark $STATUS_c)  $NOTE_c"
 
 # ---------------------------------------------------------------- 断言 d
 echo ""
-echo "▶ 断言 d：transport :4800 起服 + REST hive/tasks 真数据写入读回"
+echo "▶ $(date +%T) 断言 d：transport :4800 起服 + REST hive/tasks 真数据写入读回"
 HIVE_NAME="oob-accept-$TS"
 HIVE_ID=""
 E_SENTINEL=""
@@ -482,7 +482,7 @@ echo "  $(mark $STATUS_d)  $NOTE_d"
 
 # ---------------------------------------------------------------- 断言 e/f
 echo ""
-echo "▶ 断言 e/f：面板插件 bundle 200 + 挂载真数据 + 零 JS 错误（Playwright 探针）"
+echo "▶ $(date +%T) 断言 e/f：面板插件 bundle 200 + 挂载真数据 + 零 JS 错误（Playwright 探针）"
 PROBE_JSON=""
 PROBE_RC=99
 if wanted e || wanted f; then
