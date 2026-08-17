@@ -434,7 +434,7 @@ if wanted c; then
       # 对比证据：盒内种子 patch 本身是否存在（判「种子缺席」vs「种植通路缺席」）
       BOX_SEED="$RES/dsh_home/profiles/web/cordis.patch.yml"
       if [ -f "$BOX_SEED" ]; then
-        SEED_STATE="盒内种子 patch 在（grep honeycomb=$(grep -ci honeycomb "$BOX_SEED" 2>/dev/null) 条）→ 未达 DSH_HOME——疑似 OOB-F3（种植代码路径缺席）"
+        SEED_STATE="盒内种子 patch 在（grep honeycomb=$(grep -ci honeycomb "$BOX_SEED" 2>/dev/null) 条）→ 未达 DSH_HOME——OOB-F3 已修复（OOB-7 幂等种植）;若此处红属回归,先查 SeedPlanting marker 幂等与 WHALEPOD_DATA_ROOT"
       else
         SEED_STATE="盒内种子 patch 缺失（$BOX_SEED）→ 种子未进盒，OOB-1 侧问题"
       fi
@@ -482,11 +482,20 @@ if wanted d; then
         set_result d PASS ":4800 up；hive $HIVE_ID 写入读回 ✓；task 写入读回 ✓（证据 $OUT_DIR/hives-2.json / tasks.json）"
         # 断言 e 的防撞哨兵:hatch 一个唯一名成员(面板 roster 只渲染成员名,不渲染 hive 名;
         # mock 皮碰巧也有 queen 同名行,必须用唯一名区分真数据,见 OOB-F5)
+        # K3 校准①(OOB-F15):哨兵必须 hatch 进「面板可见 hive」——面板 resolveHiveId 规则
+        # 是 name=="hive-dev" 找不到则退回 hives[0](K3-2 client.js 源码石证);数据根被
+        # 污染/未 fresh 时本断言自建的 $HIVE_ID 未必是面板显示的那个 → 按面板规则追尾
+        PANEL_HIVE_ID="$(curl -fsS --max-time 8 "$T/v1/hives" 2>/dev/null | \
+          "$NODE" -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")).data;const h=Array.isArray(d)?(d.find(x=>x.name==="hive-dev")??d[0]):null;process.stdout.write(h&&h.id?String(h.id):"")' 2>/dev/null)"
+        HATCH_HIVE="${PANEL_HIVE_ID:-$HIVE_ID}"
+        if [ "x$HATCH_HIVE" != "x$HIVE_ID" ]; then
+          echo "    ℹ️  面板可见 hive=$HATCH_HIVE ≠ 本断言自建 $HIVE_ID（哨兵追尾面板规则;若意外请查数据根纯净度）"
+        fi
         E_SENTINEL="oob-probe-$TS"
         HATCH_OUT="$(curl -fsS -o "$OUT_DIR/hatch.json" -w '%{http_code}' --max-time 8 \
           -X POST -H 'content-type: application/json' \
           -d "{\"name\":\"$E_SENTINEL\",\"backend\":\"native\"}" \
-          "$T/v1/hives/$HIVE_ID/members/hatch" 2>/dev/null)"
+          "$T/v1/hives/$HATCH_HIVE/members/hatch" 2>/dev/null)"
         if [ "$HATCH_OUT" != "200" ] && [ "$HATCH_OUT" != "201" ]; then
           echo "    ⚠️  member hatch → $HATCH_OUT(哨兵退化为 hive 名,e 可能红)" >&2
           E_SENTINEL="$HIVE_NAME"
@@ -592,16 +601,20 @@ if wanted e || wanted f; then
     P_BROWSER="$(PJ 'o.browser')"
     P_INBOOT="$(PJ 'String((o.dshBootUrls||[]).some(u=>u.includes("whalepod")))')"
     P_BOOTURLS="$(PJ 'JSON.stringify(o.dshBootUrls||[])')"
+    P_NW200="$(PJ 'String(o.panelBundle&&o.panelBundle.nonWhalepod200||"")')"
+    P_DATASRC="$(PJ 'String(o.dataSource||"")')"
     if wanted e; then
       if [ "$P_STATUS" = "200" ] && [ "$P_DATA" = "true" ]; then
-        set_result e PASS "bundle $P_PATH 200；真数据「$HIVE_NAME」已挂载（browser=$P_BROWSER，截图 $OUT_DIR/panel.png）"
+        set_result e PASS "bundle $P_PATH 200；真数据「$HIVE_NAME」已挂载（source=${P_DATASRC:-?} browser=$P_BROWSER，截图 $OUT_DIR/panel.png）"
       elif [ "$P_STATUS" != "200" ]; then
+        NW200_HINT=""
+        [ -n "$P_NW200" ] && [ "$P_NW200" != "null" ] && NW200_HINT="；串扰提示：非 whalepod 路径先 200（$P_NW200）不记 bundle 归属（OOB-F14 防错）"
         if [ "$P_INBOOT" = "true" ]; then
-          set_result e FAIL "面板在 __DSH_BOOT__ 清单但 bundle 无 200（manifest=${P_BOOTURLS}；tried=$P_TRIED）→ modules 路由与生成 URL 失配，OOB-7 后续"
+          set_result e FAIL "面板在 __DSH_BOOT__ 清单但 bundle 无 200（manifest=${P_BOOTURLS}；tried=$P_TRIED$NW200_HINT）→ modules 路由与生成 URL 失配，OOB-7 后续"
         elif [ -d "$RES/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team" ]; then
-          set_result e FAIL "面板 bundle 无 200 且未入 __DSH_BOOT__ 清单（manifest=${P_BOOTURLS}）但面板包在盒 → 登记链断（loader 行在 dump 但 modules 未纳入），OOB-7 后续"
+          set_result e FAIL "面板 bundle 无 200 且未入 __DSH_BOOT__ 清单（manifest=${P_BOOTURLS}）但面板包在盒 → 登记链断（loader 行在 dump 但 modules 未纳入），OOB-7 后续$NW200_HINT"
         else
-          set_result e FAIL "面板 bundle 无 200 且面板包不在盒（tried=$P_TRIED）→ 面板尚未装箱，OOB-2 侧问题"
+          set_result e FAIL "面板 bundle 无 200 且面板包不在盒（tried=$P_TRIED）→ 面板尚未装箱，OOB-2 侧问题$NW200_HINT"
         fi
       else
         P_OPENED="$(PJ 'String(o.panelOpened)')"
@@ -658,7 +671,7 @@ REPORT="$OUT_DIR/REPORT.md"
   echo "- **OOB-F1**：app DataRoot 硬编真实 home（flock singleton.lock 全局互斥），sandbox HOME 对 app 层不生效——本次运行期数据写真实 \`~/Library/Application Support/WhalePod/\`。真·全沙盒验收待 app 提供数据根环境变量 override（如 \`WHALEPOD_DATA_ROOT\`），已向 OOB-1 提请。"
   echo "- **OOB-F2**：dsh web 对任意未知路径回退 SPA \`index.html\`（首次测 /health=200 但 body=<!doctype html>+__DSH_BOOT__ 注入帧，实证非真路由；源内 apps/web+packages/web grep health 零命中）——健康探针判定以上表「起服」行实测路径为准；若对外契约要宣称 /health，需 dsh web 侧补真路由（返回 JSON 健康帧）。"
   if [ "$STATUS_c" = "FAIL" ] && [ -f "$RES/dsh_home/profiles/web/cordis.patch.yml" ]; then
-    echo "- **OOB-F3**：盒内 dsh_home 种子 patch 在盒（含 honeycomb/transport insert），但运行期 DSH_HOME 的 profiles 层从未被填充——Swift 全源 grep dsh_home 零命中（Migration.swift 仅迁 legacy config.json，无种子种植代码路径）；profile patch 不合成 → transport 不启 → 断言 d 随之失。修复建议（归位 OOB-1）：Swift 首启把 Resources/dsh_home 内容拷入 harness 家目录（幂等 marker 防重复覆盖），或经 config.environment 注入等效指向。"
+    echo "- **OOB-F3（历史，已修复）**：alpha.6 前盒内 dsh_home 种子 patch 无种植代码路径（Migration.swift 仅迁 legacy config），profile patch 不合成 → transport 不启、c/d/e 同挂。**OOB-7 已修复**（Swift 首启幂等种子种植 + WHALEPOD_DATA_ROOT override.commit 5dd0ba54 系列；alpha.6 起 c✅dump honeycomb×2、d✅:4800 写读回实证）。本注记保留作历史归因；若 c/d 再红先查 SeedPlanting marker 幂等。"
   fi
 } > "$REPORT"
 

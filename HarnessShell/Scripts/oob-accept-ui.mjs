@@ -218,6 +218,10 @@ try {
   // ---- 3.6 打开团队面板（生产实证：入口是侧栏「◈团队面板」按钮；打开后 roster 经 :4800 拉真数据）----
   result.panelOpened = false
   const clickTrigger = async () => page.evaluate(() => {
+    // K3 实测（OOB-2 接线文档 + 昨日 Playwright 配方）：首选 .wp-trigger 直接 JS 点击——
+    // harness UI 的浮动吉祥物（aria-label="whale girl"）会拦截 Playwright 物理点击致 56 次 retry 卡死
+    const wp = document.querySelector('.wp-trigger')
+    if (wp) { wp.click(); return 'wp-trigger' }
     const els = [...document.querySelectorAll('button, [role="button"], [class*="trigger"]')]
     const visible = (x) => { const r = x.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
     const hit = (x) => ((x.textContent || '') + (x.getAttribute('aria-label') || '') + (x.getAttribute('title') || '')).includes('团队面板')
@@ -278,35 +282,48 @@ try {
   }
 
   // ---- 断言 e 前半：面板 bundle 200 ----
-  for (const p of panelPaths) {
+  // K3 校准②(OOB-F14)：manifest/boot 兜底 URL 不得抢 bundle 归属——曾把
+  // dsh-client-connection 的 200 记成 panelBundle（串扰）。whalepod 路径必须优先且
+  // 判定只认 whalepod 命中；其余 url 仅作 tried 证据,不参与判定。
+  const isWhalepod = (p) => typeof p === 'string' && p.includes('whalepod-team')
+  const ordered = [...panelPaths.filter(isWhalepod), ...panelPaths.filter(p => !isWhalepod(p))]
+  for (const p of ordered) {
     const full = baseUrl + p
     try {
       const resp = await ctx.request.get(full, { timeout: timeoutMs })
       result.panelBundle.tried.push({ path: p, status: resp.status() })
-      if (resp.status() === 200 && result.panelBundle.status !== 200) {
+      if (isWhalepod(p) && resp.status() === 200 && result.panelBundle.status !== 200) {
         result.panelBundle.status = 200
         result.panelBundle.path = p
         const body = await resp.text().catch(() => '')
         result.panelBundle.bytes = body.length
+      } else if (!isWhalepod(p) && resp.status() === 200) {
+        result.panelBundle.nonWhalepod200 = result.panelBundle.nonWhalepod200 || p
       }
     } catch (e) {
       result.panelBundle.tried.push({ path: p, status: -1, error: String(e).slice(0, 120) })
     }
   }
 
-  // ---- 断言 e 后半：面板挂载真数据（全 frame 遍历：面板可能默认未激活主文档，或挂在
-  // 独立 frame 内；逐 frame evaluate innerText 轮询，单帧崩不影响他帧）----
+  // ---- 断言 e 后半：面板挂载真数据。K3 校准④：以 [data-whalepod-team] 的 textContent
+  // 为判定位（防页面其他区域的同文本误真——如 OOBE 残留/其他插件）；面板可能在独立
+  // frame，逐帧轮询，单帧崩不影响他帧。找不到挂载点时退化回 body 全局搜（并标记来源）。
   const deadline = Date.now() + timeoutMs
   let dataFrame = null
   while (Date.now() < deadline && !result.dataMounted) {
     for (const fr of page.frames()) {
       try {
         const hit = await fr.evaluate(
-          (needle) => document.body && document.body.innerText.includes(needle),
+          (needle) => {
+            const el = document.querySelector('[data-whalepod-team]')
+            if (el) return (el.textContent || '').includes(needle) ? 'panel' : false
+            return document.body && document.body.innerText.includes(needle) ? 'body' : false
+          },
           opt['data-text'],
         ).catch(() => false)
         if (hit) {
           result.dataMounted = true
+          result.dataSource = hit // 'panel' = [data-whalepod-team] 命中（权威）；'body' = 全局退化（存疑证据）
           dataFrame = fr.url()
           break
         }
