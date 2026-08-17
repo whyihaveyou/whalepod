@@ -22,6 +22,9 @@
 #   --fresh-data-root   把真实 ~/Library/Application Support/WhalePod 先挪进沙盒备份，验收后
 #                       删除验收期产生的数据并完整还原（内置 dsh_home 种子仅对空数据根
 #                       生效——不属于 --stop-existing 的温柔路线，属侵入性旗语，见 OOB-F1）
+#   --fresh-legacy-config  移走 ~/.harness-shell/config.json（沙盒备份同还原）：OOB-7
+#                       警告——legacy 配置含 dev command 时 Migration 会拷进新根，app 改走 dev
+#                       dsh 与盒内 seed 撞 loader duplicate entry 崩；干净首启须先排雷
 #
 # 沙盒边界声明（验收官发现 OOB-F1）：
 #   app 的 DataRoot 硬编到真实 ~/Library/Application Support/WhalePod（flock
@@ -61,6 +64,7 @@ ONLY=""
 SKIP=""
 STOP_EXISTING=0
 FRESH_DATA_ROOT=0
+FRESH_LEGACY_CONFIG=0
 PANEL_PATHS_ARG=""
 UI_TIMEOUT_MS=15000
 
@@ -73,6 +77,7 @@ while [ $# -gt 0 ]; do
     --skip) SKIP="$2"; shift 2 ;;
     --stop-existing) STOP_EXISTING=1; shift ;;
     --fresh-data-root) FRESH_DATA_ROOT=1; shift ;;
+    --fresh-legacy-config) FRESH_LEGACY_CONFIG=1; shift ;;
     --panel-paths) PANEL_PATHS_ARG="$2"; shift 2 ;;
     --ui-timeout-ms) UI_TIMEOUT_MS="$2"; shift 2 ;;
     -h|--help) sed -n '1,36p' "$0"; exit 0 ;;
@@ -100,10 +105,13 @@ APP_DST_DIR="$SB/app"
 LOG_APP="$SB/logs/app.log"
 OUT_DIR="$SB/out"
 mkdir -p "$MNT" "$APP_DST_DIR" "$SB/logs" "$OUT_DIR" "$SB/home"
+MNT_ACTUAL=""
 
 APP_PID=""
 DATA_ROOT_REAL="$HOME/Library/Application Support/WhalePod"
+LEGACY_CFG="$HOME/.harness-shell/config.json"
 DR_MOVED=0
+LC_MOVED=0
 
 cleanup() {
   if [ -n "$APP_PID" ]; then kill "$APP_PID" 2>/dev/null; fi
@@ -114,7 +122,15 @@ cleanup() {
     rm -rf "$DATA_ROOT_REAL" 2>/dev/null
     mv "$SB/data-root-backup" "$DATA_ROOT_REAL" 2>/dev/null
   fi
-  hdiutil detach "$MNT" -quiet 2>/dev/null
+  if [ "$LC_MOVED" -eq 1 ]; then
+    mkdir -p "$HOME/.harness-shell" 2>/dev/null
+    mv "$SB/legacy-config-backup.json" "$LEGACY_CFG" 2>/dev/null
+  fi
+  if [ -n "$MNT_ACTUAL" ]; then
+    hdiutil detach "$MNT_ACTUAL" -quiet 2>/dev/null
+  else
+    hdiutil detach "$MNT" -quiet 2>/dev/null
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -147,17 +163,42 @@ if [ -n "$APP_PATH" ]; then
   ditto "$APP_PATH" "$APP_DST_DIR/$APP_NAME"
 else
   echo "▶ §1 DMG 挂载 + 拷贝安装到沙盒"
-  if ! hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null 2>&1; then
-    echo "❌ DMG 挂载失败"; exit 66
+  # 定挂载点重试 ×3，失败转系手默认挂载点并回溯真实卷名（并发挂载/临时资源忙壮军）
+  MNT_OK=0
+  try=0
+  while [ $try -lt 3 ]; do
+    if hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null 2>&1; then
+      MNT_ACTUAL="$MNT"
+      MNT_OK=1
+      break
+    fi
+    try=$((try+1))
+    doze=3
+    sleep $doze
+  done
+  if [ $MNT_OK -eq 0 ]; then
+    ATT_OUT="$(hdiutil attach -nobrowse -readonly "$DMG" 2>&1)"
+    # 回溯真实挂载点（/Volumes/<label> 或 auto-label 带序号）：
+    MNT_ACTUAL="$(printf '%s\n' "$ATT_OUT" | grep -oE '/Volumes/[^[:cntrl:]]+$' | tail -1 | sed 's/[[:space:]]*$//')"
+    if [ -z "$MNT_ACTUAL" ]; then
+      MNT_ACTUAL="$(hdiutil info | awk -v d="$DMG" 'BEGIN{RS="================================================";FS="\n"} $0 ~ d { for(i=1;i<=NF;i++){ if($i ~ /\/Volumes\//) print $i } }' | grep -oE '/Volumes/[^[:cntrl:]]+$' | tail -1)"
+    fi
+    if [ -z "$MNT_ACTUAL" ] || [ ! -d "$MNT_ACTUAL" ]; then
+      echo "❌ DMG 挂载失败（x3 定挂载点 + 回退自动挂载点均不成）"
+      printf '%s\n' "$ATT_OUT" | tail -6 | sed 's/^/    /'
+      exit 66
+    fi
+    echo "  （提示）定挂载点挂不上，已回退自动挂载：$MNT_ACTUAL"
   fi
-  APP_SRC="$(find "$MNT" -maxdepth 1 -name '*.app' -print -quit)"
+  APP_SRC="$(find "$MNT_ACTUAL" -maxdepth 1 -name '*.app' -print -quit)"
   if [ -z "$APP_SRC" ]; then
-    echo "❌ 挂载卷内无 *.app"; exit 66
+    echo "❌ 挂载卷内无 *.app 于 $MNT_ACTUAL"; exit 66
   fi
   APP_NAME="$(basename "$APP_SRC")"
   echo "  发现 app：$APP_NAME"
   ditto "$APP_SRC" "$APP_DST_DIR/$APP_NAME"
-  hdiutil detach "$MNT" -quiet 2>/dev/null
+  hdiutil detach "$MNT_ACTUAL" -quiet 2>/dev/null
+  MNT_ACTUAL=""
 fi
 APP="$APP_DST_DIR/$APP_NAME"
 EXE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
@@ -205,6 +246,17 @@ if [ "$FRESH_DATA_ROOT" -eq 1 ]; then
     echo "  --fresh-data-root：数据根本就不存在（=本就首启语义）"
   fi
 fi
+# --fresh-legacy-config：OOB-7 警告——legacy config 含 dev command 会污染 Migration 首启
+# （新根拷成的命令劫持盒内 runtime → seed 撞 loader duplicate entry 崩）；干净首启先排雷
+if [ "$FRESH_LEGACY_CONFIG" -eq 1 ]; then
+  if [ -f "$LEGACY_CFG" ]; then
+    echo "  --fresh-legacy-config：挪 $LEGACY_CFG → $SB/legacy-config-backup.json（cleanup 还原）"
+    mv "$LEGACY_CFG" "$SB/legacy-config-backup.json"
+    LC_MOVED=1
+  else
+    echo "  --fresh-legacy-config：剧情中不存在（=本就无雷）"
+  fi
+fi
 
 env -i \
   HOME="$HOME" \
@@ -216,7 +268,9 @@ echo "  pid=$APP_PID · 日志 $LOG_APP"
 BASE_URL=""
 i=0
 while [ $i -lt 240 ]; do
-  BASE_URL="$(grep -oE 'https?://[^[:space:]]*127\.0\.0\.1:[0-9]{2,5}[^[:space:]]*' "$LOG_APP" 2>/dev/null | head -1 | sed 's:/*$::')"
+  # 端口竞态(OOB-F7):[honeycomb] transport(4800) 与 [harness-shell] dsh web 两行
+  # 时序不定,head -1 会抓到 4800 把探针打到 API 上。锚定 'dsh web:' 行解析。
+  BASE_URL="$(grep 'dsh web:' "$LOG_APP" 2>/dev/null | grep -oE 'https?://[^[:space:]]*127\.0\.0\.1:[0-9]{2,5}[^[:space:]]*' | head -1 | sed 's:/*$::')"
   [ -n "$BASE_URL" ] && break
   if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
   sleep 0.5
@@ -376,6 +430,7 @@ echo ""
 echo "▶ 断言 d：transport :4800 起服 + REST hive/tasks 真数据写入读回"
 HIVE_NAME="oob-accept-$TS"
 HIVE_ID=""
+E_SENTINEL=""
 if wanted d; then
   T="http://127.0.0.1:4800"
   # JSON 助手：bundled node 读 stdin 解 envelope
@@ -406,6 +461,17 @@ if wanted d; then
       TASK_BACK="$(grep -c 'oob-accept smoke' "$OUT_DIR/tasks.json" 2>/dev/null)"; TASK_BACK="${TASK_BACK:-0}"
       if [ "$TASK_OUT" = "200" ] && [ "$HIVE_BACK" -ge 1 ] && [ "$TASK_BACK" -ge 1 ]; then
         set_result d PASS ":4800 up；hive $HIVE_ID 写入读回 ✓；task 写入读回 ✓（证据 $OUT_DIR/hives-2.json / tasks.json）"
+        # 断言 e 的防撞哨兵:hatch 一个唯一名成员(面板 roster 只渲染成员名,不渲染 hive 名;
+        # mock 皮碰巧也有 queen 同名行,必须用唯一名区分真数据,见 OOB-F5)
+        E_SENTINEL="oob-probe-$TS"
+        HATCH_OUT="$(curl -fsS -o "$OUT_DIR/hatch.json" -w '%{http_code}' --max-time 8 \
+          -X POST -H 'content-type: application/json' \
+          -d "{\"name\":\"$E_SENTINEL\",\"backend\":\"native\"}" \
+          "$T/v1/hives/$HIVE_ID/members/hatch" 2>/dev/null)"
+        if [ "$HATCH_OUT" != "200" ] && [ "$HATCH_OUT" != "201" ]; then
+          echo "    ⚠️  member hatch → $HATCH_OUT(哨兵退化为 hive 名,e 可能红)" >&2
+          E_SENTINEL="$HIVE_NAME"
+        fi
       else
         set_result d FAIL "写读回不一致（POST task=$TASK_OUT hive回读命中=$HIVE_BACK task回读命中=$TASK_BACK）"
       fi
@@ -420,24 +486,60 @@ echo "▶ 断言 e/f：面板插件 bundle 200 + 挂载真数据 + 零 JS 错误
 PROBE_JSON=""
 PROBE_RC=99
 if wanted e || wanted f; then
-  # 面板候选路径：显式参数 > dump-config 推导 > 默认猜想
+  # OOB-F8：断言 e 的真数据文本依赖 d 种下的哨兵（--only e,f 跳 d 时 E_SENTINEL 为空 → 空等必红）。
+  # 在此补种：复用同名 hive（已存在则直接取 id），再 hatch 唯一名哨兵。
+  if wanted e && [ -z "$E_SENTINEL" ]; then
+    T="http://127.0.0.1:4800"
+    jpick() {
+      "$NODE" -e 'const fs=require("fs");const o=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const d=o&&o.data;const v=eval(process.argv[2]);process.stdout.write(v==null?"":String(v))' "$1" "$2" 2>/dev/null
+    }
+    curl -fsS -o "$OUT_DIR/hives-e.json" --max-time 8 "$T/v1/hives" 2>/dev/null
+    HIVE_ID="$(jpick "$OUT_DIR/hives-e.json" "(Array.isArray(d)?d:[]).find(h=>h&&h.name==='$HIVE_NAME')?.id")"
+    if [ -z "$HIVE_ID" ]; then
+      curl -fsS -o "$OUT_DIR/hive-post-e.json" -w '%{http_code}' --max-time 8 \
+        -X POST -H 'content-type: application/json' \
+        -d "{\"name\":\"$HIVE_NAME\",\"workspace\":\"/tmp/oob-accept\"}" \
+        "$T/v1/hives" > /dev/null 2>&1
+      HIVE_ID="$(jpick "$OUT_DIR/hive-post-e.json" 'd.id')"
+    fi
+    if [ -n "$HIVE_ID" ]; then
+      E_SENTINEL="oob-probe-$TS"
+      HATCH_OUT="$(curl -fsS -o "$OUT_DIR/hatch-e.json" -w '%{http_code}' --max-time 8 \
+        -X POST -H 'content-type: application/json' \
+        -d "{\"name\":\"$E_SENTINEL\",\"backend\":\"native\"}" \
+        "$T/v1/hives/$HIVE_ID/members/hatch" 2>/dev/null)"
+      if [ "$HATCH_OUT" != "200" ] && [ "$HATCH_OUT" != "201" ]; then
+        echo "    ⚠️  e 前置补种 hatch → $HATCH_OUT（退化为 hive 名）" >&2
+        E_SENTINEL="$HIVE_NAME"
+      else
+        echo "  e 前置补种：hive $HIVE_ID + 哨兵 $E_SENTINEL"
+      fi
+    else
+      echo "    ⚠️  e 前置补种失败（:4800 不可达？）——e 大概率红" >&2
+    fi
+  fi
+  # 面板候选路径：显式参数 > dump-config 推导（strip 名 + 全名双形态）> 默认猜想
+  # 生产实证（OOB-F4，__DSH_BOOT__.entries 捕获）：client module URL 的 <id> 是
+  #   完整包名（含 @scope）：/plugins/@deepseek-ai/dsh-client-ui-whalepod-team/client.js?rev=...
+  #   dump-config loader 行的 id 是剥掉的短名（ui-whalepod-team），故两形态都发；
+  #   探针会用 __DSH_BOOT__ 权威 url 插队兜底（含 ?rev= 精确串）。
   CANDIDATES="$PANEL_PATHS_ARG"
   if [ -z "$CANDIDATES" ] && [ -f "$OUT_DIR/dump-config.txt" ]; then
-    CANDIDATES="$(grep -oE '[a-z0-9@./-]*(team|panel)[a-z0-9@./-]*' "$OUT_DIR/dump-config.txt" \
-      | grep -vi node_modules | sort -u \
-      | while read -r w; do
-          id="$(echo "$w" | sed 's:.*/dsh-client-::; s:@deepseek-ai/dsh-client-::; s:.*/::')"
-          echo "/plugins/$id.js"
-        done | sort -u | paste -sd, -)"
+    CANDIDATES="$(grep -oE '^- id: [a-z0-9.-]+' "$OUT_DIR/dump-config.txt" \
+      | awk '{print $3}' | grep -E 'team|panel' | sort -u \
+      | while read -r id; do
+          echo "/plugins/@deepseek-ai/dsh-client-$id/client.js"
+          echo "/plugins/$id/client.js"
+        done | paste -sd, -)"
   fi
   if [ -z "$CANDIDATES" ]; then
-    CANDIDATES="/plugins/ui-whalepod-team.js,/plugins/dsh-client-ui-whalepod-team.js,/plugins/whalepod-team.js,/plugins/team-panel.js"
+    CANDIDATES="/plugins/@deepseek-ai/dsh-client-ui-whalepod-team/client.js,/plugins/ui-whalepod-team/client.js,/plugins/whalepod-team/client.js,/plugins/team-panel/client.js"
   fi
   echo "  面板候选：$CANDIDATES"
   "$NODE" "$PROBE_MJS" \
     --base-url "$BASE_URL" \
     --panel-paths "$CANDIDATES" \
-    --data-text "$HIVE_NAME" \
+    --data-text "${E_SENTINEL:-$HIVE_NAME}" \
     --screenshot "$OUT_DIR/panel.png" \
     --console-log "$OUT_DIR/console-errors.txt" \
     --timeout-ms "$UI_TIMEOUT_MS" \
@@ -462,17 +564,22 @@ if wanted e || wanted f; then
     P_DATA="$(PJ 'String(o.dataMounted)')"
     P_ERRS="$(PJ '(o.consoleErrors||[]).length')"
     P_BROWSER="$(PJ 'o.browser')"
+    P_INBOOT="$(PJ 'String((o.dshBootUrls||[]).some(u=>u.includes("whalepod")))')"
+    P_BOOTURLS="$(PJ 'JSON.stringify(o.dshBootUrls||[])')"
     if wanted e; then
       if [ "$P_STATUS" = "200" ] && [ "$P_DATA" = "true" ]; then
         set_result e PASS "bundle $P_PATH 200；真数据「$HIVE_NAME」已挂载（browser=$P_BROWSER，截图 $OUT_DIR/panel.png）"
       elif [ "$P_STATUS" != "200" ]; then
-        if [ -d "$RES/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team" ]; then
-          set_result e FAIL "面板 bundle 无 200（tried=$P_TRIED）但面板包在盒（@deepseek-ai/dsh-client-ui-whalepod-team 在 Resources/node_modules）→ 登记链断，与断言 c 同挂 OOB-F3（种子 patch 未达运行 profile）"
+        if [ "$P_INBOOT" = "true" ]; then
+          set_result e FAIL "面板在 __DSH_BOOT__ 清单但 bundle 无 200（manifest=${P_BOOTURLS}；tried=$P_TRIED）→ modules 路由与生成 URL 失配，OOB-7 后续"
+        elif [ -d "$RES/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team" ]; then
+          set_result e FAIL "面板 bundle 无 200 且未入 __DSH_BOOT__ 清单（manifest=${P_BOOTURLS}）但面板包在盒 → 登记链断（loader 行在 dump 但 modules 未纳入），OOB-7 后续"
         else
           set_result e FAIL "面板 bundle 无 200 且面板包不在盒（tried=$P_TRIED）→ 面板尚未装箱，OOB-2 侧问题"
         fi
       else
-        set_result e FAIL "bundle $P_PATH 200 但 10s+ 未见数据文本「$HIVE_NAME」"
+        P_OPENED="$(PJ 'String(o.panelOpened)')"
+        set_result e FAIL "bundle $P_PATH 200 但 ${UI_TIMEOUT_MS}ms 内未见数据文本「${E_SENTINEL:-$HIVE_NAME}」（panelOpened=$P_OPENED oobe=$(PJ 'JSON.stringify(o.oobe||[])')）"
       fi
     fi
     if wanted f; then
