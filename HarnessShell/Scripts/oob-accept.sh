@@ -431,7 +431,7 @@ if wanted e || wanted f; then
         done | sort -u | paste -sd, -)"
   fi
   if [ -z "$CANDIDATES" ]; then
-    CANDIDATES="/plugins/ui-whalepod-team.js,/plugins/whalepod-team.js,/plugins/team-panel.js"
+    CANDIDATES="/plugins/ui-whalepod-team.js,/plugins/dsh-client-ui-whalepod-team.js,/plugins/whalepod-team.js,/plugins/team-panel.js"
   fi
   echo "  面板候选：$CANDIDATES"
   "$NODE" "$PROBE_MJS" \
@@ -466,7 +466,11 @@ if wanted e || wanted f; then
       if [ "$P_STATUS" = "200" ] && [ "$P_DATA" = "true" ]; then
         set_result e PASS "bundle $P_PATH 200；真数据「$HIVE_NAME」已挂载（browser=$P_BROWSER，截图 $OUT_DIR/panel.png）"
       elif [ "$P_STATUS" != "200" ]; then
-        set_result e FAIL "面板 bundle 无 200（tried=$P_TRIED；alpha.5 预期红——面板尚未注册入发行包）"
+        if [ -d "$RES/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team" ]; then
+          set_result e FAIL "面板 bundle 无 200（tried=$P_TRIED）但面板包在盒（@deepseek-ai/dsh-client-ui-whalepod-team 在 Resources/node_modules）→ 登记链断，与断言 c 同挂 OOB-F3（种子 patch 未达运行 profile）"
+        else
+          set_result e FAIL "面板 bundle 无 200 且面板包不在盒（tried=$P_TRIED）→ 面板尚未装箱，OOB-2 侧问题"
+        fi
       else
         set_result e FAIL "bundle $P_PATH 200 但 10s+ 未见数据文本「$HIVE_NAME」"
       fi
