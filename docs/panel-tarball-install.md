@@ -37,6 +37,16 @@ npm install --legacy-peer-deps \
 
 2. **依赖可解析**：安装后的 `node_modules/@deepseek-ai/dsh-client-ui-whalepod-team` 必须在 app 的依赖解析路径上（workspace 里就是 web-app `package.json` 的 `workspace:^` 依赖 + pnpm 链接；装箱场景就是上一步的 file: 安装）。包内 `package.json` 已带 `dsh.client` manifest（inject: slots/locale/theme，platform web，immediately false），loader 自动读取。
 
+### 3a. 装箱（app bundle）场景的实测修正（OOB-1 alpha.6，Flash-4 反馈）
+
+- **不要用 `npm install --legacy-peer-deps` 装箱**：legacy 模式会重算整个依赖树，可能把先行装入的 dsh peer（如 `@deepseek-ai/cordis-plugin-group`）剪掉，导致内置 dsh `--dump-config` 报 `ERR_MODULE_NOT_FOUND`、自举崩。面板 tarball `dependencies` 为空（peer 由 runtime 自带），**无 npm 事务必要——直接 tar 手动 extract 到目标 node_modules**：
+  ```bash
+  mkdir -p "$TARGET/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team"
+  tar xzf /tmp/whalepod-panel-pack/deepseek-ai-dsh-client-ui-whalepod-team-0.1.0-rc.5.tgz \
+    -C "$TARGET/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team" --strip-components=1
+  ```
+- **symlink 归一化放在所有 dump-config 之后**：dsh heal 在 dump-config 时会把自有包链接重写为**绝对路径**（实测 zod 相对→绝对；honeycomb/面板不在 heal manifest 不受影响）。因此「绝对链→相对链」的归一化必须在全部 dump-config 完成、codesign 之前执行，否则 .app 挪位后断链。
+
 ## 4. 验证（已实测通过的步骤）
 
 ```bash
