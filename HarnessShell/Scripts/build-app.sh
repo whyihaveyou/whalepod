@@ -24,11 +24,15 @@
 #   ARCH            架构（swift --arch 命名：x86_64 / arm64）默认$(uname -m)（宿主）
 #                   交叉构建示例：ARCH=x86_64 ./Scripts/build-app.sh
 #   SCRATCH_PATH    隔离编译缓存（跨架构并存时建议设，避免 .build/release 指针互踩）默认空
+#   RUNTIME_BUNDLE  1=装箱运行时（node+dsh+honeycomb+内置 dsh_home seed）默认 1；0=纯壳（Slim/调试）
+#   HONEYCOMB_TARBALL 指定 honeycomb tarball（默认自动 npm pack 或复用 /tmp/honeycomb-pack）
+#   HONEYCOMB_PACK_DIR npm pack 输出目录 默认 /tmp/honeycomb-pack
 # =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # ---- 可配置项 -------------------------------------------------------------
 APP_NAME="${APP_NAME:-HarnessShell}"
@@ -42,6 +46,8 @@ DIST_DIR="${DIST_DIR:-dist}"
 KEEP_BUILD="${KEEP_BUILD:-0}"
 ARCH="${ARCH:-$(uname -m)}"
 SCRATCH_PATH="${SCRATCH_PATH:-}"
+RUNTIME_BUNDLE="${RUNTIME_BUNDLE:-1}"
+HONEYCOMB_PACK_DIR="${HONEYCOMB_PACK_DIR:-/tmp/honeycomb-pack}"
 
 PLIST_TEMPLATE="Sources/HarnessShell/Info.plist"
 ICON_ICNS="Resources/AppIcon.icns"
@@ -98,12 +104,58 @@ plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 echo "==> .app 组装完成: $APP"
 
-# ---- 3) 签名 --------------------------------------------------------------
+# ---- 3) 运行时装箱（OOB-1：node + dsh + honeycomb 同事务 + 内置 dsh_home seed）----
+if [ "$RUNTIME_BUNDLE" = "1" ]; then
+  echo "==> [OOB-1] RUNTIME_BUNDLE=1：装箱 node + dsh + honeycomb + dsh_home seed"
+
+  # 3a. honeycomb tarball：显式 HONEYCOMB_TARBALL > 已 pack 产物 > npm pack 现产
+  if [ -n "${HONEYCOMB_TARBALL:-}" ]; then
+    [ -f "$HONEYCOMB_TARBALL" ] || { echo "!! HONEYCOMB_TARBALL 不存在: $HONEYCOMB_TARBALL"; exit 1; }
+    echo "==> 使用指定 HONEYCOMB_TARBALL=$HONEYCOMB_TARBALL"
+  else
+    mkdir -p "$HONEYCOMB_PACK_DIR"
+    HONEYCOMB_TARBALL="$HONEYCOMB_PACK_DIR/whalepod-honeycomb-0.1.0.tgz"
+    if [ ! -f "$HONEYCOMB_TARBALL" ]; then
+      echo "==> npm pack @whalepod/honeycomb → $HONEYCOMB_PACK_DIR/"
+      (cd "$REPO_ROOT/packages/honeycomb" && npm pack --pack-destination "$HONEYCOMB_PACK_DIR")
+    else
+      echo "==> 复用已有 pack 产物: $HONEYCOMB_TARBALL"
+    fi
+    [ -f "$HONEYCOMB_TARBALL" ] || { echo "!! honeycomb tarball 未产出: $HONEYCOMB_TARBALL"; exit 1; }
+  fi
+
+  # 3b. build-runtime.sh：node + dsh + honeycomb 同事务 npm install（内含 cordis 单实例断言 + ESM 冒烟）
+  HONEYCOMB_TARBALL="$HONEYCOMB_TARBALL" APP_PATH="$APP" "$ROOT/Scripts/build-runtime.sh"
+
+  # 3c. 内置 DSH_HOME 预置 seed（打包期，零 Swift）：
+  #     dsh --dump-config 自举建 profile 结构（initProfile + heal 共享层），
+  #     然后 profile-seed 写 V2 共享层相对链接 + V3 cordis.patch.yml insert 块。
+  BUNDLED_HOME="$APP/Contents/Resources/dsh_home"
+  BUNDLED_NODE="$APP/Contents/Resources/node/bin/node"
+  BUNDLED_BIN="$APP/Contents/Resources/node_modules/@deepseek-ai/dsh/lib/bin.js"
+  echo "==> [OOB-1] 内置 DSH_HOME 预置: $BUNDLED_HOME"
+  mkdir -p "$BUNDLED_HOME"
+  DSH_HOME="$BUNDLED_HOME" "$BUNDLED_NODE" "$BUNDLED_BIN" --profile web --dump-config >/dev/null 2>&1
+  "$ROOT/Scripts/profile-seed-honeycomb.sh" --apply --dsh-home "$BUNDLED_HOME" \
+    --src "$APP/Contents/Resources/node_modules/@whalepod/honeycomb" --rel-src
+
+  # 3d. 验证：dump-config 合成 patch 含 honeycomb 条目（守门判据 10 的配套断言）
+  if DSH_HOME="$BUNDLED_HOME" "$BUNDLED_NODE" "$BUNDLED_BIN" --profile web --dump-config 2>/dev/null \
+       | grep -q "honeycomb"; then
+    echo "    ✅ 内置 dsh_home dump-config 合成含 honeycomb 条目"
+  else
+    echo "    ❌ 内置 dsh_home dump-config 未见 honeycomb 条目"; exit 1
+  fi
+else
+  echo "==> RUNTIME_BUNDLE=0：跳过运行时装箱（纯壳，Slim/调试用）"
+fi
+
+# ---- 4) 签名 --------------------------------------------------------------
 echo "==> codesign --force --sign '$SIGN_IDENTITY' $SIGN_OPTIONS $APP"
 # shellcheck disable=SC2086
 codesign --force --sign "$SIGN_IDENTITY" $SIGN_OPTIONS "$APP"
 
-# ---- 4) 校验 --------------------------------------------------------------
+# ---- 5) 校验 --------------------------------------------------------------
 echo "==> codesign --verify --deep --strict --verbose=2 $APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|TeamIdentifier|Signature|CodeDirectory" || true

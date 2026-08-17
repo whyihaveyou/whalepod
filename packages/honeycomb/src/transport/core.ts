@@ -19,11 +19,16 @@ export function createHoneycombTransport(
   options: TransportOptions = {},
 ): HoneycombTransport {
   const services = {
-    hive: ctx.get('hive'),
-    ledger: ctx.get('ledger'),
-    courier: ctx.get('courier'),
-    mandate: ctx.get('mandate'),
-    roster: ctx.get('roster'),
+    // 注意：non-strict get（strict=false）——cordis 的 strict get 要求提供方 fiber
+    // 处于 active（state 2），而 cordis-plugin-loader 在 dsh 运行时的 entry fiber
+    // 启动阶段（state 1）就调用 apply；此时 strict get 恒 undefined（实测
+    // fiberState=1），transport 会以 services=undefined 启动、路由全部 500。
+    // 这些服务由同一 entry fiber 同步 provide，non-strict 读取是安全的。
+    hive: ctx.get('hive', false),
+    ledger: ctx.get('ledger', false),
+    courier: ctx.get('courier', false),
+    mandate: ctx.get('mandate', false),
+    roster: ctx.get('roster', false),
     // cancel 通道门面（可选）：装配方把 createOrchestrationLoop 句柄从
     // options.orchestration 传进来；缺省时 POST /tasks/{id}/cancel 对在途
     // 任务返回 503 ORCHESTRATION_UNAVAILABLE，其余路径不受影响。

@@ -90,22 +90,16 @@ jobs:
           echo "==> VERSION=$VERSION BUILD_NUMBER=$BUILD_NUMBER"
           echo "==> FULL_DMG=$FULL_DMG  SLIM_ZIP=$SLIM_ZIP  FULL_ZIP=$FULL_ZIP"
 
-      - name: Build .app bundle — Full seed (后续 M0 注入 runtime)
+      - name: Build .app bundle — Full (装箱：node+dsh+honeycomb+内置 dsh_home seed)
+        # OOB-1（#01a00db1）：build-app.sh 内部完成 RUNTIME_BUNDLE=1 全链——
+        #   npm pack @whalepod/honeycomb → build-runtime.sh 同事务安装（cordis/schemastery 单实例）
+        #   → dsh --dump-config 自举内置 DSH_HOME → profile-seed-honeycomb.sh 预置
+        #   （V2 共享层相对链接 + V3 cordis.patch.yml insert 块）→ dump-config 合成断言。
         working-directory: HarnessShell
         env:
           VERSION: ${{ env.VERSION }}
           BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
         run: ./Scripts/build-app.sh release
-
-      # ====================================================================
-      # 注意：build-runtime.sh 会从 nodejs.org 下载 node tarball + 从 npm
-      # registry 拉 dsh 全家桶。在 CI runner 里走默认网络即可，不需代理。
-      # 仅 Full 档执行：Slim 档由 RuntimeBootstrap 探测链兜底（命中本机 node
-      # 或 npx，无 node 时显示引导文案），不打包 node/dsh 进 .app。
-      # ====================================================================
-      - name: M0 bundled runtime (node + dsh) — Full only
-        working-directory: HarnessShell
-        run: ./Scripts/build-runtime.sh
 
       # ====================================================================
       # 签名档位：默认 ad-hoc（CI runner 无 Apple Developer 证书）。

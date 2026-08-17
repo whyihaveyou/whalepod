@@ -16,8 +16,9 @@
 #         dsh.bundle 字段，走 bundles 会让整个 profile 起不来。
 #
 # 用法：
-#   ./Scripts/profile-seed-honeycomb.sh --profile web --src <honeycomb 包目录> [--dsh-home DIR]
+#   ./Scripts/profile-seed-honeycomb.sh --profile web --src <honeycomb 包目录> [--dsh-home DIR] [--rel-src]
 #   --apply：真写 DSH_HOME；缺省对 /tmp/profile-seed-demo 副本演练（只读）。
+#   --rel-src：V2 共享层 symlink 用相对路径（装箱场景：dsh_home 随 .app 整体挪位仍有效）。
 #
 # 依赖：node（写 YAML 用）+ 可选的 dsh CLI（验证用）。
 # 零 Swift：不改 RuntimeBootstrap.swift / Sources/。
@@ -29,12 +30,14 @@ PROFILE=${PROFILE:-web}
 SRC=${SRC:-}
 DSH_HOME=${DSH_HOME:-"$HOME/Library/Application Support/WhalePod/harness"}
 APPLY=0
+REL_SRC=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply)        APPLY=1;      shift 1 ;;
     --profile)      PROFILE="$2"; shift 2 ;;
     --src)          SRC="$2";     shift 2 ;;
     --dsh-home)     DSH_HOME="$2"; shift 2 ;;
+    --rel-src)      REL_SRC=1;    shift 1 ;;
     *)              shift 1 ;;   # 忽略未知 flag
   esac
 done
@@ -75,6 +78,13 @@ fi
 mkdir -p "$SHARED_NM/@whalepod"
 if [ -e "$DEST" ] || [ -L "$DEST" ]; then
   echo "    [1] 共享层已存在（幂等跳过）: $DEST"
+elif [ "$REL_SRC" -eq 1 ]; then
+  # 相对链接（装箱场景）：app 整体挪位/换名后链接依然有效。
+  # 从 DEST 所在目录到 SRC 的相对路径，如 dsh_home/profiles/node_modules/@whalepod/
+  #   -> ../../../../node_modules/@whalepod/honeycomb（bundle 内 Resources 同树）。
+  REL_TARGET="$(node -e "const {relative, dirname, join, basename} = require('path'); const {realpathSync} = require('fs'); const dest = process.argv[1], src = process.argv[2]; const dReal = realpathSync(dirname(dest)), sReal = realpathSync(dirname(src)); process.stdout.write(join(relative(dReal, sReal), basename(src)))" "$DEST" "$SRC")"
+  ln -s "$REL_TARGET" "$DEST"
+  echo "    [1] symlink 共享层: $DEST -> $REL_TARGET (相对)"
 else
   ln -s "$SRC" "$DEST"
   echo "    [1] symlink 共享层: $DEST -> $SRC"
@@ -107,8 +117,12 @@ try { content = fs.readFileSync(file, 'utf8'); } catch { /* 新文件 */ }
 if (/id:\s*honeycomb/.test(content)) {
   console.log('    [2] cordis.patch.yml 已含 honeycomb 条目（幂等，跳过）');
 } else {
+  // 空 patch 层（profile.ts PROFILE_PATCH_TEMPLATE 即 `# 注释\n[]`）：
+  // 直接 append 会在 `[]` 后产生「两个顶层序列」非法 YAML（实测 YAMLException），
+  // 必须先把残留的 `[]` 空数组行清掉再 append。
+  content = content.replace(/^[ \t]*\[\][ \t]*\n?/gm, '');
   fs.writeFileSync(file, content.replace(/\s*$/, '') + '\n' + BLOCK);
-  console.log('    [2] append insert 块 → ' + file);
+  console.log('    [2] append insert 块（已清空数组模板残留）→ ' + file);
   console.log('        - insert: { id: honeycomb, name: @whalepod/honeycomb, transport: 127.0.0.1:4800 }');
 }
 EOF
