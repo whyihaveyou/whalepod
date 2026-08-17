@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 确保 DSH_HOME（harness 数据根）目录存在
         try? FileManager.default.createDirectory(at: DataRoot.harnessHomeURL,
                                                  withIntermediateDirectories: true)
+        // OOB-7：盒内 dsh_home 种子 → 运行时 DSH_HOME（幂等；失败不硬崩，下次启动重试）。
+        // 必须在 dsh 进程启动前完成——否则 honeycomb/面板 insert patch 与共享层链缺失
+        // （OOB-F3 根因：开箱断言 c/d/e 全挂）。
+        SeedPlanting.runFirstLaunchSeedIfNeeded()
 
         buildMainMenu()
         let controller = MainWindowController()

@@ -17,8 +17,16 @@ enum DataRoot {
     static let appSupportDirName = "WhalePod"
 
     /// 基础数据根：`~/Library/Application Support/WhalePod/`（不存在则创建）。
+    /// OOB-F1：支持 `WHALEPOD_DATA_ROOT` 环境变量覆盖数据根（验收沙盒/测试用；
+    /// 默认仍是真实 home，语义不变）。
     static var baseURL: URL {
         let fm = FileManager.default
+        if let override = ProcessInfo.processInfo.environment["WHALEPOD_DATA_ROOT"],
+           !override.isEmpty {
+            let url = URL(fileURLWithPath: override, isDirectory: true)
+            try? fm.createDirectory(at: url, withIntermediateDirectories: true)
+            return url
+        }
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let url = appSupport.appendingPathComponent(appSupportDirName, isDirectory: true)
         try? fm.createDirectory(at: url, withIntermediateDirectories: true)
