@@ -19,6 +19,8 @@
 #   ./Scripts/profile-seed-honeycomb.sh --profile web --src <honeycomb 包目录> [--dsh-home DIR] [--rel-src]
 #   --apply：真写 DSH_HOME；缺省对 /tmp/profile-seed-demo 副本演练（只读）。
 #   --rel-src：V2 共享层 symlink 用相对路径（装箱场景：dsh_home 随 .app 整体挪位仍有效）。
+#   --register-panel：同时幂等注册 @deepseek-ai/dsh-client-ui-whalepod-team
+#         （OOB 面板，docs/panel-tarball-install.md §3：insert 形态建可见性条目）。
 #
 # 依赖：node（写 YAML 用）+ 可选的 dsh CLI（验证用）。
 # 零 Swift：不改 RuntimeBootstrap.swift / Sources/。
@@ -31,6 +33,7 @@ SRC=${SRC:-}
 DSH_HOME=${DSH_HOME:-"$HOME/Library/Application Support/WhalePod/harness"}
 APPLY=0
 REL_SRC=0
+REGISTER_PANEL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply)        APPLY=1;      shift 1 ;;
@@ -38,6 +41,7 @@ while [ $# -gt 0 ]; do
     --src)          SRC="$2";     shift 2 ;;
     --dsh-home)     DSH_HOME="$2"; shift 2 ;;
     --rel-src)      REL_SRC=1;    shift 1 ;;
+    --register-panel) REGISTER_PANEL=1; shift 1 ;;
     *)              shift 1 ;;   # 忽略未知 flag
   esac
 done
@@ -126,6 +130,34 @@ if (/id:\s*honeycomb/.test(content)) {
   console.log('        - insert: { id: honeycomb, name: @whalepod/honeycomb, transport: 127.0.0.1:4800 }');
 }
 EOF
+
+# ---- 2b. 幂等 append 面板 dsh.client 行（OOB：团队面板开箱即用） ----------------
+# 参照 packages/bundle/web-app/cordis.patch.yml 已提交行（id: ui-whalepod-team）。
+# 面板靠 app runtime 提供 peer（react/slots/cordis），patch 只做「可见性登记」。
+if [ "$REGISTER_PANEL" -eq 1 ]; then
+  node - "$PATCH_FILE" <<'EOF'
+const fs = require('fs');
+const file = process.argv[2];
+const BLOCK = [
+  '',
+  '# --- @deepseek-ai/dsh-client-ui-whalepod-team（OOB 面板 seed 注入，幂等）---',
+  '- insert:',
+  '    - id: ui-whalepod-team',
+  "      name: '@deepseek-ai/dsh-client-ui-whalepod-team'",
+  '',
+].join('\n');
+let content = '';
+try { content = fs.readFileSync(file, 'utf8'); } catch { /* 新文件 */ }
+if (/id:\s*ui-whalepod-team/.test(content)) {
+  console.log('    [2b] cordis.patch.yml 已含面板条目（幂等，跳过）');
+} else {
+  content = content.replace(/^[ \t]*\[\][ \t]*\n?/gm, '');
+  fs.writeFileSync(file, content.replace(/\s*$/, '') + '\n' + BLOCK);
+  console.log('    [2b] append 面板 insert 块（已清空数组模板残留）→ ' + file);
+  console.log('        - insert: { id: ui-whalepod-team, name: @deepseek-ai/dsh-client-ui-whalepod-team }');
+}
+EOF
+fi
 
 # ---- 3. 展示最终 patch 层 ------------------------------------------------------
 echo "    [3] $PATCH_FILE 现状："

@@ -27,6 +27,9 @@
 #   RUNTIME_BUNDLE  1=装箱运行时（node+dsh+honeycomb+内置 dsh_home seed）默认 1；0=纯壳（Slim/调试）
 #   HONEYCOMB_TARBALL 指定 honeycomb tarball（默认自动 npm pack 或复用 /tmp/honeycomb-pack）
 #   HONEYCOMB_PACK_DIR npm pack 输出目录 默认 /tmp/honeycomb-pack
+#   PANEL_TARBALL  团队面板 tarball（docs/panel-tarball-install.md §2）默认空（CI 不装）；
+#                  本地 alpha.6 显式传 /tmp/whalepod-panel-pack/deepseek-ai-dsh-client-ui-whalepod-team-0.1.0-rc.5.tgz
+#                  非空时：build-runtime 同 bundle --legacy-peer-deps 装 + profile seed 登记 + 双断言
 # =============================================================================
 set -euo pipefail
 
@@ -48,6 +51,7 @@ ARCH="${ARCH:-$(uname -m)}"
 SCRATCH_PATH="${SCRATCH_PATH:-}"
 RUNTIME_BUNDLE="${RUNTIME_BUNDLE:-1}"
 HONEYCOMB_PACK_DIR="${HONEYCOMB_PACK_DIR:-/tmp/honeycomb-pack}"
+PANEL_TARBALL="${PANEL_TARBALL:-}"
 
 PLIST_TEMPLATE="Sources/HarnessShell/Info.plist"
 ICON_ICNS="Resources/AppIcon.icns"
@@ -124,8 +128,14 @@ if [ "$RUNTIME_BUNDLE" = "1" ]; then
     [ -f "$HONEYCOMB_TARBALL" ] || { echo "!! honeycomb tarball 未产出: $HONEYCOMB_TARBALL"; exit 1; }
   fi
 
+  # 3a2. 面板 tarball（OOB-2 产物）：显式 PANEL_TARBALL 才接线（CI/旧流程默认不装，保持可复现）
+  if [ -n "$PANEL_TARBALL" ]; then
+    [ -f "$PANEL_TARBALL" ] || { echo "!! PANEL_TARBALL 不存在: $PANEL_TARBALL"; exit 1; }
+    echo "==> 面板接线：$PANEL_TARBALL"
+  fi
+
   # 3b. build-runtime.sh：node + dsh + honeycomb 同事务 npm install（内含 cordis 单实例断言 + ESM 冒烟）
-  HONEYCOMB_TARBALL="$HONEYCOMB_TARBALL" APP_PATH="$APP" "$ROOT/Scripts/build-runtime.sh"
+  HONEYCOMB_TARBALL="$HONEYCOMB_TARBALL" PANEL_TARBALL="$PANEL_TARBALL" APP_PATH="$APP" "$ROOT/Scripts/build-runtime.sh"
 
   # 3c. 内置 DSH_HOME 预置 seed（打包期，零 Swift）：
   #     dsh --dump-config 自举建 profile 结构（initProfile + heal 共享层），
@@ -136,8 +146,10 @@ if [ "$RUNTIME_BUNDLE" = "1" ]; then
   echo "==> [OOB-1] 内置 DSH_HOME 预置: $BUNDLED_HOME"
   mkdir -p "$BUNDLED_HOME"
   DSH_HOME="$BUNDLED_HOME" "$BUNDLED_NODE" "$BUNDLED_BIN" --profile web --dump-config >/dev/null 2>&1
-  "$ROOT/Scripts/profile-seed-honeycomb.sh" --apply --dsh-home "$BUNDLED_HOME" \
-    --src "$APP/Contents/Resources/node_modules/@whalepod/honeycomb" --rel-src
+  SEED_ARGS=(--apply --dsh-home "$BUNDLED_HOME" \
+    --src "$APP/Contents/Resources/node_modules/@whalepod/honeycomb" --rel-src)
+  [ -n "$PANEL_TARBALL" ] && SEED_ARGS+=(--register-panel)
+  "$ROOT/Scripts/profile-seed-honeycomb.sh" "${SEED_ARGS[@]}"
 
   # 3d. 验证：dump-config 合成 patch 含 honeycomb 条目（守门判据 10 的配套断言）
   if DSH_HOME="$BUNDLED_HOME" "$BUNDLED_NODE" "$BUNDLED_BIN" --profile web --dump-config 2>/dev/null \
@@ -146,6 +158,73 @@ if [ "$RUNTIME_BUNDLE" = "1" ]; then
   else
     echo "    ❌ 内置 dsh_home dump-config 未见 honeycomb 条目"; exit 1
   fi
+  # 3d2. 面板登记断言（PANEL_TARBALL 非空时必查）
+  if [ -n "$PANEL_TARBALL" ]; then
+    if DSH_HOME="$BUNDLED_HOME" "$BUNDLED_NODE" "$BUNDLED_BIN" --profile web --dump-config 2>/dev/null \
+         | grep -q "ui-whalepod-team"; then
+      echo "    ✅ 内置 dsh_home dump-config 合成含 ui-whalepod-team 条目"
+    else
+      echo "    ❌ 内置 dsh_home dump-config 未见 ui-whalepod-team 条目"; exit 1
+    fi
+  fi
+
+  # 3e. profiles/node_modules symlink 归一化 + 面板补链（必须放在所有 dump-config 之后）
+  # dsh 自举/heal 时对共享层写「绝对链接」（含构建机绝对路径）：每次 dump-config 都会
+  # 把 dsh 自有包的链接重写回绝对（实测 zod 相对→绝对）。honeycomb/面板 不在 heal
+  # manifest 内，其相对链不被触碰。若在 3d 之前归一化，3d 的 dump-config 会重新绝对化。
+  # → 全部改写为相对链接（等价 --rel-src 的 V2 形态，相对 realpath 基准）：
+  #   ① codesign --deep --strict 不再拒签（invalid destination for symbolic link）
+  #   ② .app 可整体挪位（构建机路径不固化）
+  # 面板包非 dsh 依赖（bootstrap 不为其建链），需手动补相对链 —— 与 honeycomb seed 同形态。
+  "$BUNDLED_NODE" - "$BUNDLED_HOME" "$APP/Contents/Resources/node_modules" <<'EOF'
+const fs = require('fs');
+const path = require('path');
+const [home, res] = process.argv.slice(2);
+const linkDir = path.join(home, 'profiles', 'node_modules');
+const resReal = fs.realpathSync(res);
+let rewritten = 0, created = 0;
+
+// 收集全部 symlink（find 语义）。visited 按 realpath 去重：
+// 避免 scope 目录本身是 symlink 时顺着解析进真实树造成菱形/环重复访问。
+const visited = new Set();
+function collect(dir, out) {
+  let r;
+  try { r = fs.realpathSync(dir); } catch { return; }
+  if (visited.has(r)) return;
+  visited.add(r);
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ent.name === '.bin') continue;
+    const p = path.join(dir, ent.name);
+    const st = fs.lstatSync(p);
+    if (st.isSymbolicLink()) out.push(p);
+    else if (st.isDirectory()) collect(p, out);
+  }
+  return out;
+}
+const links = collect(linkDir, []);
+for (const p of links) {
+  const t = fs.readlinkSync(p);
+  if (!path.isAbsolute(t)) continue;
+  let tReal;
+  try { tReal = fs.realpathSync(p); } catch { continue; } // 悬空链跳过
+  if (!tReal.startsWith(resReal)) continue;
+  // 幂等：先删后建（半成品/菱形重复访问安全）
+  try { fs.unlinkSync(p); } catch {}
+  fs.symlinkSync(path.relative(path.dirname(p), resReal) + t.slice(resReal.length), p);
+  rewritten++;
+}
+// 面板补链（bootstrap 不链非 dsh 依赖；已存在则跳过）
+const panelName = '@deepseek-ai/dsh-client-ui-whalepod-team';
+const panelDir = path.join(linkDir, ...panelName.split('/'));
+const panelReal = path.join(resReal, ...panelName.split('/'));
+if (fs.existsSync(panelReal) && !fs.existsSync(panelDir)) {
+  fs.mkdirSync(path.dirname(panelDir), { recursive: true });
+  fs.symlinkSync(path.relative(path.dirname(panelDir), panelReal), panelDir);
+  created++;
+}
+console.log(`    ✅ profiles symlink 归一化：${rewritten} 绝对→相对，面板补链 ${created}`);
+EOF
+
 else
   echo "==> RUNTIME_BUNDLE=0：跳过运行时装箱（纯壳，Slim/调试用）"
 fi

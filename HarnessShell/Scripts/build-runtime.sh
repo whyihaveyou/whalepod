@@ -23,6 +23,11 @@
 #   HONEYCOMB_TARBALL=/tmp/honeycomb-pack/whalepod-honeycomb-0.1.0.tgz \
 #   ./Scripts/build-runtime.sh
 #
+#   # 装箱团队面板（docs/panel-tarball-install.md §2；同一 bundle 二次安装，
+#   #   独立 --legacy-peer-deps 事务——peer react/slots/cordis 由 app runtime 提供）
+#   PANEL_TARBALL=/tmp/whalepod-panel-pack/deepseek-ai-dsh-client-ui-whalepod-team-0.1.0-rc.5.tgz \
+#   ./Scripts/build-runtime.sh
+#
 # 产物布局（最终）：
 #   <APP_PATH>/Contents/Resources/
 #   ├── node/
@@ -32,6 +37,7 @@
 #   └── node_modules/
 #       ├── @deepseek-ai/dsh/   # dsh 全家桶（已 --omit=dev 净化）
 #       ├── @whalepod/honeycomb/ # 装箱插件（HONEYCOMB_TARBALL 非空时，同事务）
+#       ├── @deepseek-ai/dsh-client-ui-whalepod-team/ # 团队面板（PANEL_TARBALL 非空时，--legacy-peer-deps 事务）
 #       └── <transitive deps>
 #
 # 体积预估（实测为准）：
@@ -61,6 +67,10 @@ VERBOSE=${VERBOSE:-0}                              # 1=开启 set -x
 # honeycomb 装箱（docs/honeycomb-app-bundling.md Q5）：为空则只装 dsh（兼容旧流程）；
 # 非空则与 dsh 同一 npm 事务安装（单 lockfile → cordis/schemastery peerDedup 单实例）
 HONEYCOMB_TARBALL=${HONEYCOMB_TARBALL:-}
+# 面板装箱（docs/panel-tarball-install.md §2）：非空则同一 bundle 二次安装，
+# 独立 --legacy-peer-deps 事务（peer react/slots/cordis 由 app runtime 提供，npm 不去公网拉）。
+# 面板包无运行时 npm 依赖（沙盒实测 "1 package added"），不参与 honeycomb 的 peer 去重事务。
+PANEL_TARBALL=${PANEL_TARBALL:-}
 
 [ "$VERBOSE" = "1" ] && set -x
 
@@ -179,6 +189,66 @@ if [ -n "$HONEYCOMB_TARBALL" ]; then
   done
 fi
 
+# 面板装箱（仅当 PANEL_TARBALL 非空）：同一 bundle 手动 extract（insert 形态，不走 npm）。
+# 为什么不用 `npm install --legacy-peer-deps`（docs/panel-tarball-install.md §2 沙盒命令）：
+#   legacy 模式会重算整棵依赖树，把 phase-1 自动装的 dsh peer（如
+#   @deepseek-ai/cordis-plugin-group）剪掉 → 装箱崩溃。2026-08-17 实测：
+#   装完后 dsh --dump-config 报 ERR_MODULE_NOT_FOUND cordis-plugin-group。
+# 面板包无运行时 npm 依赖（tarball dependencies 为空；peer react/slots/cordis
+#   由 app runtime 提供），手动放置 + package.json 登记即等价于 §2 的最终状态。
+if [ -n "$PANEL_TARBALL" ]; then
+  [ -f "$PANEL_TARBALL" ] || {
+    echo "❌ PANEL_TARBALL 不存在：$PANEL_TARBALL" >&2
+    exit 2
+  }
+  echo ""
+  echo "==> 面板同 bundle 手动 extract（docs/panel-tarball-install.md §2，insert 形态）"
+  PANEL_DEST_DIR="$BUNDLE_DIR/node_modules/@deepseek-ai"
+  mkdir -p "$PANEL_DEST_DIR"
+  tar -xzf "$PANEL_TARBALL" -C "$PANEL_DEST_DIR"   # npm/pnpm tgz 顶层恒为 package/
+  mv "$PANEL_DEST_DIR/package" "$PANEL_DEST_DIR/dsh-client-ui-whalepod-team"
+  PANEL_PKG="$PANEL_DEST_DIR/dsh-client-ui-whalepod-team"
+  [ -f "$PANEL_PKG/lib/invariant.js" ] || {
+    echo "❌ 面板 lib/invariant.js 缺失：$PANEL_PKG" >&2
+    ls "$PANEL_PKG" >&2
+    exit 5
+  }
+  # package.json 登记（--omit=dev 净化不误删：deps 加 file: 引用）
+  node -e "
+    const fs = require('fs');
+    const pkgFile = '$BUNDLE_DIR/package.json';
+    const j = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+    j.dependencies['@deepseek-ai/dsh-client-ui-whalepod-team'] = 'file:$PANEL_TARBALL';
+    fs.writeFileSync(pkgFile, JSON.stringify(j, null, 2) + '\n');
+  "
+  echo "    ✅ 面板手动 extract 完成：$PANEL_PKG"
+  echo "    ✅ 面板入口：lib/{index,invariant,client}.js（无运行时 npm 依赖，peer 由 app runtime 提供）"
+
+  # extract 不触碰依赖树；仍重跑 cordis / schemastery 单实例断言守门
+  echo "---- extract 后 cordis / schemastery 单实例断言 ----"
+  for pkg in "@deepseek-ai/cordis" "@deepseek-ai/schemastery"; do
+    TOP_META="$BUNDLE_DIR/node_modules/$pkg/package.json"
+    NESTED="$BUNDLE_DIR/node_modules/@whalepod/honeycomb/node_modules/$pkg"
+    if [ -f "$TOP_META" ] && [ ! -e "$NESTED" ]; then
+      VER=$(node -e "const p=require('$TOP_META');console.log(p.version)")
+      echo "    ✅ $pkg 单实例保持（顶层唯一）: version=$VER"
+    elif [ -e "$NESTED" ]; then
+      echo "    ❌ $pkg 被嵌套，重复实例！" >&2
+    else
+      echo "    ℹ️  $pkg 未探测到（信息性）"
+    fi
+  done
+  # 树完整性守门：dsh peer 关键包顶层仍在（--legacy-peer-deps 剪枝回归护栏，2026-08-17 实测缺口）
+  for peer in "@deepseek-ai/cordis-plugin-group"; do
+    if [ -f "$BUNDLE_DIR/node_modules/$peer/package.json" ]; then
+      echo "    ✅ $peer 顶层仍在（树完整性保持）"
+    else
+      echo "    ❌ $peer 缺失——依赖树不完整（peers 被剪）！" >&2
+      exit 6
+    fi
+  done
+fi
+
 # 锁定 lockfile（确定性可复现的「单一真理源」）
 [ -f "$BUNDLE_DIR/package-lock.json" ] && cp "$BUNDLE_DIR/package-lock.json" "$WORKDIR/dsh-package-lock.json"
 echo "    ✅ package-lock.json 已保存（后续 CI 可走 npm ci --offline 离线复现）"
@@ -257,6 +327,20 @@ else
       fi
     else
       echo "    ⚠️  honeycomb lib/index.js 缺失于 .app：$RES_HC_INDEX" >&2
+    fi
+  fi
+
+  # 4d. 面板装箱自检（真 Node ESM import 冒烟，docs/panel-tarball-install.md §5）
+  if [ -n "$PANEL_TARBALL" ]; then
+    RES_PANEL_INDEX="$RES/node_modules/@deepseek-ai/dsh-client-ui-whalepod-team/lib/invariant.js"
+    if [ -f "$RES_PANEL_INDEX" ]; then
+      if "$RES_NODE" --input-type=module -e "import('$RES_PANEL_INDEX').then(m=>{console.log('OK')}).catch(e=>{console.error(e.code||e.message);process.exit(1)})" >/dev/null 2>&1; then
+        echo "    ✅ 面板真 Node ESM import 冒烟通过：$RES_PANEL_INDEX"
+      else
+        echo "    ⚠️  面板 ESM import 失败（真 Node 运行时）" >&2
+      fi
+    else
+      echo "    ⚠️  面板 lib/invariant.js 缺失于 .app：$RES_PANEL_INDEX" >&2
     fi
   fi
 fi
