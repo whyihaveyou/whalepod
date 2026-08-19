@@ -41,6 +41,15 @@
 
 验收快照（alpha.3）：DMG env -i 裸环境 bundled 冷启 20s 端口解析+HTTP 200 ✓；Slim 剥 node → unavailable 指引常驻不崩 ✓、正常环境 npxFallback 15s HTTP 200 ✓。
 
+### 当前两个工件 + 校验值（v0.1.0-alpha.7 / tag `v0.1.0-alpha.7`，2026-08-19）
+
+| 档 | 文件 | 大小 | SHA-256 |
+| --- | --- | --- | --- |
+| Full | `WhalePod-0.1.0-alpha.7-macos-arm64.dmg` | 206,022,209 B（≈196MB） | `5597fd50ff705b425cd03df19f3db7fbcd48c7e14fec041065736019653e1ece` |
+| Slim | `WhalePod-0.1.0-alpha.7-macos-arm64-slim.zip` | 1,200,677 B（≈1.1MB） | `80776775529b7b5cfa30ba5beace6514df2e918bdd8e9348c68110d96ffef41a` |
+
+验收快照（alpha.7）：Full DMG env -i 裸环境盒内 node 冷启 35s → honeycomb transport :4800 + dsh web HTTP 200 ✓；Slim 剥 node →『未找到可用的 Node 运行时』指引 ✓、正常环境 npxFallback 30s HTTP 200 ✓。appcast.xml 已挂 alpha.7 release（稳定 URL releases/latest/download/appcast.xml）。
+
 > ⚠️ SHA-256 随每次构建变化，本节为**当时发布快照**；日常发布请以构建日志/make-slim.sh 输出为准。
 
 ### 安装指引（放网站两栏展示）
