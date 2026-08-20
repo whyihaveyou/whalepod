@@ -99,7 +99,7 @@ mkdir -p "$(dirname "$APPCAST_PATH")"
   echo '    <description>WhalePod 每日 alpha 自动更新通道（Sparkle 2 兼容；item 内含 Full DMG + Slim ZIP 双 enclosure）</description>'
   echo '    <language>zh-CN</language>'
   if [ -n "$EXISTING_ITEMS" ]; then
-    printf "%s" "$EXISTING_ITEMS"
+    printf "%s\n" "$EXISTING_ITEMS"
   fi
   printf "%s\n" "$ITEM_XML"
   echo '  </channel>'
