@@ -41,14 +41,14 @@
 
 验收快照（alpha.3）：DMG env -i 裸环境 bundled 冷启 20s 端口解析+HTTP 200 ✓；Slim 剥 node → unavailable 指引常驻不崩 ✓、正常环境 npxFallback 15s HTTP 200 ✓。
 
-### 当前两个工件 + 校验值（v0.1.0-alpha.8 / tag `v0.1.0-alpha.8`，2026-08-20）
+### 当前两个工件 + 校验值（v0.1.0-alpha.9 / tag `v0.1.0-alpha.9`，2026-08-21）
 
 | 档 | 文件 | 大小 | SHA-256 |
 | --- | --- | --- | --- |
-| Full | `WhalePod-0.1.0-alpha.8-macos-arm64.dmg` | 209,404,277 B（≈200MB） | `695b8f108c128515f50c5011d3124c61e2e18224af6fb7b95b0362a25e4ef6ae` |
-| Slim | `WhalePod-0.1.0-alpha.8-macos-arm64-slim.zip` | 1,200,673 B（≈1.1MB） | `1c7f39c62762d7e9104bc27bb6a27d9ac7ee5d8ca981ca879c399240d07420f0` |
+| Full | `WhalePod-0.1.0-alpha.9-macos-arm64.dmg` | 209,404,285 B（≈200MB） | `c4fcdafb83fe336d7f55a9278567ee32a2ea90aa19636c8487388d9b2eb3f901` |
+| Slim | `WhalePod-0.1.0-alpha.9-macos-arm64-slim.zip` | 1,200,675 B（≈1.1MB） | `3e0cd5c0c46ad040723d65bb8b9669097a62380dd88b059a1e027d978d6ca5a2` |
 
-验收快照（alpha.8）：Full DMG env -i 裸环境盒内 node 冷启 35s → honeycomb transport :4800 + dsh web HTTP 200 ✓；Slim 剥 node →『未找到可用的 Node 运行时』指引 ✓、正常环境 npxFallback dsh web HTTP 200 ✓。appcast.xml 已修复杂质（二次运行残留 `</item>` bug，已开修复卡）并挂 alpha.8 release。
+验收快照（alpha.9）：Full DMG env -i 裸环境盒内 node 冷启 35s → honeycomb transport :4800 + dsh web HTTP 200 ✓；Slim 剥 node →『未找到可用的 Node 运行时』指引 ✓、正常环境 npxFallback dsh web HTTP 200 ✓。appcast 脚本修复（6fdb883）后首轮生成即 xmllint 通过。
 
 > ⚠️ SHA-256 随每次构建变化，本节为**当时发布快照**；日常发布请以构建日志/make-slim.sh 输出为准。
 
